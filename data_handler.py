@@ -35,11 +35,14 @@ class DataHandler:
         
         self.permutation_columns = columns
         
-    def construct_contingency_table(self, df: pd.DataFrame) -> np.array:
-        '''Constructs the contingency table for the permutation saved.
+    def construct_contingency_vector(self, df: pd.DataFrame) -> np.array:
+        '''Constructs the contingency vector for the permutation saved.
         
+        Args:
+            df (pd.DataFrame): The dataframe to calculate the contingency vector. Considering the permutation columns.
+
         Returns:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-            np.array: The contingency table.
+            np.array: The contingency vector.
         '''
         # Group the data by the permutation columns and count occurrences
         grouped = df.groupby(self.permutation_columns).size().reset_index(name='frequency')
@@ -47,8 +50,8 @@ class DataHandler:
         # Merge to get frequencies that are not present in the given data.
         merged = pd.merge(self.permutation, grouped, how='left', on=self.permutation_columns).fillna(0)
 
-        # Pivot table to create the contingency table
-        contingency_table = pd.pivot_table(
+        # Pivot vector to create the contingency vector
+        contingency_vector = pd.pivot_table(
             merged,
             index=self.permutation_columns[:-1], 
             columns=self.permutation_columns[-1], 
@@ -56,5 +59,5 @@ class DataHandler:
             fill_value=0, 
             aggfunc=lambda x: x)
         
-        # Return the contingency table as a numpy array
-        return contingency_table.to_numpy(dtype=int)
+        # Return the contingency vector as a numpy array
+        return contingency_vector.to_numpy(dtype=int).flatten()

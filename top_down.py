@@ -11,7 +11,7 @@ class TopDown:
     def __init__(self):
         '''Constructor of the TopDown class.'''
         self.tree = None
-        self.data = None
+        self.data_handler = None
     
     def set_data(self, data: pd.DataFrame):
         '''Setter of the data into the TopDown class.
@@ -29,18 +29,3 @@ class TopDown:
         '''
         self.tree = tree
     
-    def construct_contingency_table(self, df: pd.DataFrame, columns: list) -> np.array:
-        '''Constructs the contingency table for the given dataframe and columns.
-        
-        Args:
-            df (pd.DataFrame): The dataframe to be used.
-            columns (list): The columns to be used for the contingency table.
-        
-        Returns:
-            np.array: The contingency table.
-        '''
-        contingency_table = [df.shape[0]] # Total number of persons
-        grouped = df.groupby(columns).size().reset_index(name='frequency')
-        contingency_table = pd.pivot_table(grouped, index=columns[:-1], columns=columns[-1], values='frequency', fill_value=0, aggfunc=lambda x: x)
-        print(contingency_table)
-        return contingency_table.to_numpy(dtype=int)

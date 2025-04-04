@@ -1,3 +1,5 @@
+import numpy as np
+
 class GeographicTree:
     '''Represents a tree structure for geographic data. Each node can have multiple children.'''
     def __init__(self, id):
@@ -13,15 +15,15 @@ class GeographicTree:
         '''
         self.id = id
         self.children = []
-        self.contingency_table = None
+        self.contingency_vector = None
 
     def add_child(self, child):
         '''Adds a child node to the current node.'''
         self.children.append(child)
 
-    def set_contingency_table(self, contingency_table):
+    def set_contingency_vector(self, contingency_vector: np.array):
         '''Sets the contingency table for the current node.'''
-        self.contingency_table = contingency_table
+        self.contingency_vector = contingency_vector
 
     def __str__(self):
         '''Returns a string representation of the GeographicTree object.'''
