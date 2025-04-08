@@ -1,6 +1,9 @@
 # Data files
 data/
 
+# Discrete Gaussian repository (https://github.com/IBM/discrete-gaussian-differential-privacy.git)
+discrete-gaussian-differential-privacy/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
