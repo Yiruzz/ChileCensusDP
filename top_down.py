@@ -92,8 +92,8 @@ class TopDown:
         '''
         if mechanism == 'discrete_gaussian':
             self.noise_mechanism = self.discrete_gaussian
-        elif mechanism == 'laplace':
-            self.noise_mechanism = self.laplace
+        elif mechanism == 'discrete_laplace':
+            self.noise_mechanism = self.discrete_laplace
 
     def apply_noise(self, mechanism, rhos: float) -> None:
         '''Applies noise to the contingency vector using the specified mechanism.
@@ -118,7 +118,7 @@ class TopDown:
         for i in range(len(contingency_vector)):
             contingency_vector[i] += sample_dgauss(rho)
     
-    def laplace(self, contingency_vector: np.array, rho: float) -> None:
+    def discrete_laplace(self, contingency_vector: np.array, rho: float) -> None:
         '''Applies Laplace noise to the contingency vector.
         
         Args:
