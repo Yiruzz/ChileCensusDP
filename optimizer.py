@@ -13,6 +13,7 @@ class OptimizationModel:
         This method creates a Gurobi model to estimate the contingency vector using non-negative constraints.
         '''
         self.model = gp.Model(f'NonNegativeRealEstimation. NodeID: {id_node}')
+        self.model.setParam('OutputFlag', 0)
         n = len(contingency_vector)
         
         # Decision variables
@@ -51,7 +52,7 @@ class OptimizationModel:
         This method creates a Gurobi model to estimate the non negative discrete contingency vector.
         '''
         self.model = gp.Model(f'RoundingEstimation. NodeID: {id_node}')
-        
+        self.model.setParam('OutputFlag', 0)
         n = len(x_tilde)
         
         # Rounding problem
