@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from config import QUERIES
+from config import QUERIES, GEO_CONSTRAINTS
 
 class GeographicTree:
     '''Represents a tree structure for geographic data. Each node can have multiple children.'''
@@ -15,10 +15,13 @@ class GeographicTree:
             id (int): The ID of the geographic entity.
             children (list): A list of child nodes.
             contingency_table (np.array): The contingency table associated with this node.
+            constraints (list): The constraints associated with this node.
         '''
         self.id = id
         self.children = []
         self.contingency_vector = None
+
+        self.constraints = None
 
     def add_child(self, child):
         '''Adds a child node to the current node.'''
@@ -69,6 +72,9 @@ class GeographicTree:
                 
                 # Create a new child node with the filtered data
                 child_node = GeographicTree(location_id)
+
+                # Add edit constraints for the child node       
+                child_node.constraints = [(lambda x, value=filtered_df.shape[0]: constraint(x, value)) for constraint in GEO_CONSTRAINTS[geo_labels[0]]]
 
                 # Construct the contingency vector for the child node
                 child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)

@@ -29,27 +29,34 @@ class OptimizationModel:
         # Objective function: minimize the sum of absolute differences
         self.model.setObjective(gp.quicksum(abs_diff), gp.GRB.MINIMIZE)
 
-        # Real value constraints
+        # Additional constraints
         for i, constraint in enumerate(constraints):
-                self.model.addConstr(constraint(x), name=f"GivenConstraint_{i}")
-        
+            self.model.addConstr(constraint(x), name=f"GivenConstraint_{i}")
+
         # Run the model
         self.model.optimize()
+
+        # Check for infeasibility
+        if self.model.status == gp.GRB.INFEASIBLE:
+            print(f"Model is infeasible for node {id_node}.")
+            self.model.write("infeasible_model.lp")
+            return None
+
         return x.X
 
     
-    def rounding_estimation(self, x_solution, id_node, constraints=None):
+    def rounding_estimation(self, x_tilde, id_node, constraints=None):
         '''Rounding estimation of the contingency vector.
         
         This method creates a Gurobi model to estimate the non negative discrete contingency vector.
         '''
         self.model = gp.Model(f'RoundingEstimation. NodeID: {id_node}')
         
-        n = len(x_solution)
+        n = len(x_tilde)
         
         # Rounding problem
-        x_floor = np.floor(x_solution)
-        residual_round = x_solution - x_floor
+        x_floor = np.floor(x_tilde)
+        residual_round = x_tilde - x_floor
         
         y = self.model.addMVar(shape=n, vtype=gp.GRB.BINARY, name="y")
 
@@ -64,11 +71,18 @@ class OptimizationModel:
 
         x_rounded = x_floor + y
 
-        # Real value constraints
+        # Additional constraints
         for i, constraint in enumerate(constraints):
-                self.model.addConstr(constraint(x_rounded), name=f"GivenConstraint_{i}")
+            self.model.addConstr(constraint(x_rounded), name=f"GivenConstraint_{i}")
         
         # Run the model
         self.model.optimize()
+
+        # Check for infeasibility
+        if self.model.status == gp.GRB.INFEASIBLE:
+            print(f"Model is infeasible for node {id_node}.")
+            self.model.write("infeasible_model.lp")
+            return None
+        
         return x_floor + y.X
 

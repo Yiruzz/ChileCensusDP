@@ -4,7 +4,7 @@ import numpy as np
 import time
 import gurobipy as gp
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, RHOS
+from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
@@ -23,7 +23,7 @@ class TopDown:
             geo_tree (GeographicTree): The geographic tree structure.
             permutation (pd.DataFrame): The permutations of the columns for the contingency vector.
             noise_mechanism (function): The noise generation function. (Discrete Gaussian or Laplace)
-            rhos (list): The privacy parameters for each level in the tree.
+            privacy_budgets (list): The privacy parameters for each level in the tree.
         '''
         self.data = None
         self.geo_tree = None
@@ -32,7 +32,9 @@ class TopDown:
 
         self.noise_mechanism = None
         self.sensitivity = None
-        self.rhos = RHOS
+        self.privacy_budgets = PRIVACY_PARAMETERS
+
+        self.optimizer = OptimizationModel()
     
     def compute_permutation(self, columns: list) -> None:
         '''Computes the permutations of the given columns.
@@ -73,6 +75,9 @@ class TopDown:
         # Initialize the contingency vector for the root node
         self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
         self.geo_tree.construct_tree(GEO_COLUMNS, self.data, self.permutation)
+        #Edit Constraint
+        self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
+        
         time2 = time.time()
         print(f'Finished constructing the tree in {time2-time1} seconds.\n')
 
@@ -85,9 +90,9 @@ class TopDown:
         print(f'Measurement phase...')
         self.set_mechanism(MECHANISM)
 
-        print(f'Applying noise using {MECHANISM} mechanism with privacy parameters {self.rhos} ...')
+        print(f'Applying noise using {MECHANISM} mechanism with privacy parameters {self.privacy_budgets} ...')
         time1 = time.time()
-        self.apply_noise(self.noise_mechanism, self.rhos)
+        self.apply_noise(self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
 
@@ -100,70 +105,61 @@ class TopDown:
             2. Non-negative discrete estimation of the previous result. (Rounding problem)
         '''
         print(f'Estimation phase...')
-        self.root_estimation()
-        self.recursive_estimation()
-    
-    def root_estimation(self) -> None:
-        '''Estimates the contingency vector for the root node of the geographic tree.'''
-        print(f'Estimating solution for root node...')
+        print(f'Running estimation for root node...')
         time1 = time.time()
-        
-        model = gp.Model("NonNegativeRealEstimationRoot")
-        vector_length = len(self.geo_tree.contingency_vector)
-
-        # Desicion variables
-        x = model.addMVar(shape=vector_length, lb=0.0, name="x")
-        
-        # Auxiliary variables for absolute differences
-        # NOTE: If we want to use minimum square as the objetive function, auxiliar variables are not necessary.
-        abs_diff = model.addMVar(shape=vector_length, lb=0.0, name="abs_diff")
-        # Add constraints to define abs_diff as |x[i] - contingency_vector[i]|
-        model.addConstrs((abs_diff[i] >= x[i] - self.geo_tree.contingency_vector[i] for i in range(vector_length)), name="AbsDiffPos")
-        model.addConstrs((abs_diff[i] >= self.geo_tree.contingency_vector[i] - x[i] for i in range(vector_length)), name="AbsDiffNeg")
-        
-        # Objective function: minimize the sum of absolute differences
-        model.setObjective(abs_diff.sum(), gp.GRB.MINIMIZE)
-
-        # Real value constraint
-        model.addConstr(x.sum() == self.data.shape[0], name="EqualityConstraints")
-
-        # Run the model
-        model.optimize()
-        x_solution = x.X
-        
-        # Rounding problem
-        x_floor = np.floor(x_solution)
-        residual_round = x_solution - x_floor
-        model = gp.Model("RoundingEstimationRoot")
-
-        y = model.addMVar(shape=vector_length, vtype=gp.GRB.BINARY, name="y")
-
-        # Auxiliary variables for absolute differences
-        abs_diff = model.addMVar(shape=vector_length, lb=0.0, name="abs_diff")
-
-        # Restriction: abs_diff = |residual_round - y|
-        model.addConstr(abs_diff >= residual_round - y)
-        model.addConstr(abs_diff >= y - residual_round)
-
-        model.setObjective(gp.quicksum(abs_diff), gp.GRB.MINIMIZE)
-
-        x_rounded = x_floor + y
-
-        model.addConstr(x_rounded.sum() == self.data.shape[0], name="EqualityConstraints")
-
-        model.optimize()
-        solution = x_floor + y.X
-
-        self.geo_tree.contingency_vector = solution
+        self.root_estimation()
         time2 = time.time()
         print(f'Finished estimating the solution for root node in {time2-time1} seconds.\n')
-        print(f'Estimated solution for root node: {solution}.\n')
 
-    def recursive_estimation(self) -> None:
-        '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
         print(f'Running estimation for children nodes recursively...')
         time1 = time.time()
+        self.recursive_estimation(self.geo_tree)
+        time2 = time.time()
+        print(f'Finished estimating the solution for children nodes in {time2-time1} seconds.\n')
 
+    def root_estimation(self) -> None:
+        '''Estimates the contingency vector for the root node of the geographic tree.'''
+
+        x_tilde = self.optimizer.non_negative_real_estimation(self.geo_tree.contingency_vector, self.geo_tree.id, self.geo_tree.constraints)
+        self.geo_tree.contingency_vector = self.optimizer.rounding_estimation(x_tilde, self.geo_tree.id, self.geo_tree.constraints)    
+
+    def recursive_estimation(self, node: GeographicTree) -> None:
+        '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
+        
+        if not node.children: return # Base case
+
+        childs_contingency_vectors = [child.contingency_vector for child in node.children]
+        joint_contingency_vector = np.concatenate(childs_contingency_vectors)
+
+        # Construct the new constraints for the joint contingency vector
+        constraints = []
+        vectors_length = self.permutation.shape[0]
+        start = 0
+        for child in node.children:
+            end = start + vectors_length
+            for constraint in child.constraints:
+                # NOTE: We need to use default arguments to avoid late binding issues in lambda functions.
+                constraints.append(lambda x, s=start, e=end, c=constraint: c(x[s:e]))
+
+            start = end
+        
+        # Consistency constraint
+        constraints.append(lambda x: x.sum() == node.contingency_vector.sum())
+        
+        # Estimate the solution for the joint contingency vector
+        x_tilde = self.optimizer.non_negative_real_estimation(joint_contingency_vector, node.id, constraints)
+        joint_solution = self.optimizer.rounding_estimation(x_tilde, node.id, constraints)
+        
+        # Split the joint solution into the contingency vectors for each child node
+        start = 0
+        for child in node.children:
+            end = start + vectors_length
+            child.contingency_vector = joint_solution[start:end]
+            start = end
+
+        # Recursively call the function for each child node
+        for child in node.children:
+            self.recursive_estimation(child)
 
 
     def set_mechanism(self, mechanism: str) -> None:

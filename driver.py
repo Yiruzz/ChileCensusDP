@@ -7,6 +7,5 @@ def main():
     topdown.measurement_phase()
     topdown.estimation_phase()
 
-
 if __name__ == "__main__":
     main()
