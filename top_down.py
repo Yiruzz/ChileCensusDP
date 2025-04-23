@@ -182,7 +182,36 @@ class TopDown:
         '''
         if self.geo_tree is not None:
             self.geo_tree.apply_noise(mechanism, rhos)
-    
+
+    def check_correctness(self) -> None:
+        '''Checks the correctness of the tree structure considering that its childs sums up to the parent node.
+        '''
+        if self.geo_tree is not None:
+            print(f'Checking correctness of the tree...')
+            time1 = time.time()
+            self.check_correctness_node(self.geo_tree)
+            time2 = time.time()
+            print(f'Finished checking correctness in {time2-time1} seconds.\n')
+
+
+    def check_correctness_node(self, node) -> None:
+        '''Checks that the sum of the values of the current node are equal to the sum of the values of its children.
+        '''
+        if node.children:
+            # Check if the sum of the contingency vectors of the children nodes is equal to the parent node's contingency vector
+            node_sum = np.sum(node.contingency_vector)
+            children_sum = 0
+            for child in node.children:
+                children_sum += np.sum(child.contingency_vector)
+
+            if node_sum != children_sum:            
+                print(f'Error: The sum of the contingency vectors of the children nodes is not equal to the parent node\'s contingency vector.')
+                print(f'Parent node contingency vector: {node.contingency_vector}')
+                return
+            else:
+                for child in node.children:
+                    self.check_correctness_node(child)
+
     def discrete_gaussian(self, contingency_vector: np.array, rho: float) -> None:
         '''Applies discrete Gaussian noise to the contingency vector.
         
