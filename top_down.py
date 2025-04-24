@@ -4,7 +4,7 @@ import numpy as np
 import time
 import gurobipy as gp
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS
+from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
@@ -24,6 +24,7 @@ class TopDown:
             permutation (pd.DataFrame): The permutations of the columns for the contingency vector.
             noise_mechanism (function): The noise generation function. (Discrete Gaussian or Laplace)
             privacy_budgets (list): The privacy parameters for each level in the tree.
+            optimizer (OptimizationModel): The optimization model used for estimation.
         '''
         self.data = None
         self.geo_tree = None
@@ -49,6 +50,9 @@ class TopDown:
         self.permutation = pd.DataFrame(
             list(product(*unique_values)), 
             columns=columns)
+        
+        # Sort by the columns to ensure a consistent order
+        self.permutation.sort_values(by=columns, inplace=True)
 
     def init_routine(self) -> None:
         '''Initialization the routine for the TopDown class.
@@ -161,7 +165,69 @@ class TopDown:
         for child in node.children:
             self.recursive_estimation(child)
 
+    def construct_microdata(self) -> pd.DataFrame:
+        '''Constructs the microdata from the contingency vector of the geographic tree.
+        
+        Returns:
+            pd.DataFrame: The constructed microdata.
+        '''
+        print(f'Constructing microdata from the contingency vector...')
+        time1 = time.time()
+        # Recursively construct the microdata from the contingency vector of the geographic tree
+        microdata_dict = self.recursive_construct_microdata(self.geo_tree, 0)
+        time2 = time.time()
+        print(f'Finished constructing microdata in {time2-time1} seconds.\n')
+        
+        print(f'Writing microdata to {OUTPUT_PATH+OUTPUT_FILE} ...')
+        time1 = time.time()
+        # Convert the dictionary to a DataFrame and return
+        noisy_df = pd.DataFrame(microdata_dict)
+        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False)
+        time2 = time.time()
+        print(f'Finished writing microdata in {time2-time1} seconds.\n')
+        print(f'Process finished :)\n')
+        return noisy_df
 
+    def recursive_construct_microdata(self, node: GeographicTree, current_tree_level: int) -> pd.DataFrame:
+        '''Recursively calls to construct a microdata of all leaves of the tree.
+        
+        Args:
+            node (GeographicTree): The current node of the tree.
+            geo_info_list (list): The list of geographic information to be added to the microdata.
+        Returns:
+            pd.DataFrame: The constructed microdata.
+        '''
+        microdata_dict = None
+        # Base case: if the node is a leaf, construct the microdata for that node
+        if not node.children:
+            # Create a Diccionary to store the microdata for the current node
+            microdata_dict = {col: [] for col in QUERIES}
+            current_index = 0
+            for index, row in self.permutation.iterrows():
+                for col in QUERIES:
+                    # Add the value of the row[col] node.contingency_vector[index] times to the dictionary
+                    microdata_dict[col].extend(np.repeat(row[col], node.contingency_vector[index]))
+            current_index += 1
+            # Add the geographic information for the current node
+            microdata_dict[GEO_COLUMNS[current_tree_level-1]] = list(np.repeat(node.id, len(microdata_dict[QUERIES[0]])))
+        # Recursive case: if the node has children
+        else:
+            microdata_dict = {}
+            for child in node.children:
+                # Recursively call the function for each child node
+                child_microdata = self.recursive_construct_microdata(child, current_tree_level + 1)
+                # Concatenate the microdata from the child node to the current microdata
+                for key in child_microdata.keys():
+                    if key in microdata_dict:
+                        microdata_dict[key].extend(child_microdata[key])
+                    else:
+                        microdata_dict[key] = child_microdata[key]
+            # Add the geographic information for the current node
+            if current_tree_level != 0:
+                microdata_dict[GEO_COLUMNS[current_tree_level-1]] = list(np.repeat(node.id, len(microdata_dict[QUERIES[0]])))
+        
+        return microdata_dict
+    
     def set_mechanism(self, mechanism: str) -> None:
         '''Sets the noise generation mechanism.
         
