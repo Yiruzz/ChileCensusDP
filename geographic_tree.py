@@ -74,7 +74,7 @@ class GeographicTree:
                 child_node = GeographicTree(location_id)
 
                 # Add edit constraints for the child node       
-                child_node.constraints = [(lambda x, value=filtered_df.shape[0]: constraint(x, value)) for constraint in GEO_CONSTRAINTS[geo_labels[0]]]
+                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[geo_labels[0]]]
 
                 # Construct the contingency vector for the child node
                 child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)

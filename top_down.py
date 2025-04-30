@@ -147,8 +147,10 @@ class TopDown:
 
             start = end
         
-        # Consistency constraint
-        constraints.append(lambda x: x.sum() == node.contingency_vector.sum())
+        # Add constraints for consistency of the values of different child nodes
+        for index in range(vectors_length):
+            constraints.append(lambda joint_vector, s=index, value=node.contingency_vector[index]: 
+                               joint_vector[s::vectors_length].sum() == value)
         
         # Estimate the solution for the joint contingency vector
         x_tilde = self.optimizer.non_negative_real_estimation(joint_contingency_vector, node.id, constraints)
