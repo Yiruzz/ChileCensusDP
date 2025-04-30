@@ -33,7 +33,7 @@ class GeographicTree:
         Args:
             df (pd.DataFrame): The dataframe to calculate the contingency vector.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
-            
+               
         Returns:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
             np.array: The contingency vector.
         '''
@@ -97,4 +97,15 @@ class GeographicTree:
         
         for child in self.children:
             child.apply_noise(mechanism, rhos[1:])
+
+    def count_nodes(self) -> int:
+        '''Counts the number of nodes in the tree.
+        
+        Returns:
+            int: The number of nodes in the tree.
+        '''
+        count = 1
+        for child in self.children:
+            count += child.count_nodes()
+        return count
     
