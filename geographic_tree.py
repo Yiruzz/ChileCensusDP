@@ -21,6 +21,9 @@ class GeographicTree:
         self.children = []
         self.contingency_vector = None
 
+        self.comparative_vector = None
+        self.TVD = None
+
         self.constraints = None
 
     def add_child(self, child):
@@ -109,3 +112,33 @@ class GeographicTree:
             count += child.count_nodes()
         return count
     
+    def compare_vectors(self) -> float:
+        '''Compares the contingency vector with the comparative vector. It uses Total Variation Distance (TVD) to measure the difference.
+        
+        Returns:
+            float: The Total Variation Distance (TVD) between the contingency vector and the comparative vector.
+        '''
+        total_tvd = 0.0
+
+        if self.contingency_vector is not None and self.comparative_vector is not None:
+            # Normalize the vectors to represent probability distributions
+            contingency_sum = np.sum(self.contingency_vector)
+            comparative_sum = np.sum(self.comparative_vector)
+            p = self.contingency_vector / contingency_sum
+            q = self.comparative_vector / comparative_sum
+
+            # Compute the Total Variation Distance for the current node
+            tvd = 0.5 * np.sum(np.abs(p - q))
+            self.TVD = tvd
+
+        # # Recursively compute TVD for child nodes
+        # for child in self.children:
+        #     total_tvd += child.compare_vectors()
+    
+    def copy_to_comparative_vector(self) -> None:
+        '''Copies the contingency vector to the comparative vector. It also calls the same method for all child nodes.'''
+        if self.contingency_vector is not None:
+            self.comparative_vector = np.copy(self.contingency_vector)
+        
+        for child in self.children:
+            child.copy_to_comparative_vector()

@@ -4,7 +4,7 @@ import numpy as np
 import time
 import gurobipy as gp
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE
+from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, TVD_FLAG
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
@@ -81,6 +81,9 @@ class TopDown:
         self.geo_tree.construct_tree(GEO_COLUMNS, self.data, self.permutation)
         #Edit Constraint
         self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
+
+        # Make a copy of the vector to compare with the original vector after modifications
+        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
         
         time2 = time.time()
         print(f'Finished constructing the tree in {time2-time1} seconds.\n')
@@ -99,6 +102,7 @@ class TopDown:
         self.apply_noise(self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
+        if TVD_FLAG: print(f'Total Variation Distance (TVD) for the noisy contingency vector: {self.compare_vectors()}')
 
     def estimation_phase(self) -> None:
         '''Estimation phase of the TopDown algorithm.
@@ -124,8 +128,13 @@ class TopDown:
     def root_estimation(self) -> None:
         '''Estimates the contingency vector for the root node of the geographic tree.'''
 
+        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
         x_tilde = self.optimizer.non_negative_real_estimation(self.geo_tree.contingency_vector, self.geo_tree.id, self.geo_tree.constraints)
+        if TVD_FLAG: print(f'Total Variation Distance (TVD) for non-negative real estimation: {self.compare_vectors()}')
+
+        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
         self.geo_tree.contingency_vector = self.optimizer.rounding_estimation(x_tilde, self.geo_tree.id, self.geo_tree.constraints)    
+        if TVD_FLAG: print(f'Total Variation Distance (TVD) for rounding estimation: {self.compare_vectors()}')
 
     def recursive_estimation(self, node: GeographicTree) -> None:
         '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
@@ -306,3 +315,12 @@ class TopDown:
         # TODO: Refactor to generalize the sensitivity
         for i in range(len(contingency_vector)):
             contingency_vector[i] += sample_dlaplace(1/epsilon)
+
+    def compare_vectors(self) -> float:
+        '''Compares the contingency vector with the comparative vector. It uses Total Variation Distance (TVD) to measure the difference.
+        
+        Returns:
+            float: The Total Variation Distance (TVD) between the contingency vector and the comparative vector.
+        '''
+        self.geo_tree.compare_vectors()
+        return self.geo_tree.TVD
