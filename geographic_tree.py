@@ -1,3 +1,4 @@
+from collections import deque
 import numpy as np
 import pandas as pd
 
@@ -16,15 +17,18 @@ class GeographicTree:
             children (list): A list of child nodes.
             contingency_table (np.array): The contingency table associated with this node.
             constraints (list): The constraints associated with this node.
+
+            comparative_vector (np.array): The comparative vector associated with this node.
+            distance_metric (float): The distance metric associated with this node.
         '''
         self.id = id
         self.children = []
         self.contingency_vector = None
 
-        self.comparative_vector = None
-        self.TVD = None
-
         self.constraints = None
+
+        self.comparative_vector = None
+        self.distance_metric = None
 
     def add_child(self, child):
         '''Adds a child node to the current node.'''
@@ -111,30 +115,7 @@ class GeographicTree:
         for child in self.children:
             count += child.count_nodes()
         return count
-    
-    def compare_vectors(self) -> float:
-        '''Compares the contingency vector with the comparative vector. It uses Total Variation Distance (TVD) to measure the difference.
         
-        Returns:
-            float: The Total Variation Distance (TVD) between the contingency vector and the comparative vector.
-        '''
-        total_tvd = 0.0
-
-        if self.contingency_vector is not None and self.comparative_vector is not None:
-            # Normalize the vectors to represent probability distributions
-            contingency_sum = np.sum(self.contingency_vector)
-            comparative_sum = np.sum(self.comparative_vector)
-            p = self.contingency_vector / contingency_sum
-            q = self.comparative_vector / comparative_sum
-
-            # Compute the Total Variation Distance for the current node
-            tvd = 0.5 * np.sum(np.abs(p - q))
-            self.TVD = tvd
-
-        # # Recursively compute TVD for child nodes
-        # for child in self.children:
-        #     total_tvd += child.compare_vectors()
-    
     def copy_to_comparative_vector(self) -> None:
         '''Copies the contingency vector to the comparative vector. It also calls the same method for all child nodes.'''
         if self.contingency_vector is not None:
@@ -142,3 +123,57 @@ class GeographicTree:
         
         for child in self.children:
             child.copy_to_comparative_vector()
+
+    def iterate_by_levels(self):
+        '''Iterates over the tree level by level and yields nodes at each level.'''
+        queue = deque([(self, 0)])  # Start with the root node and level 0
+        current_level = 0
+        level_nodes = []
+
+        while queue:
+            node, level = queue.popleft()
+
+            # If we move to a new level, yield the nodes from the previous level
+            if level != current_level:
+                yield current_level, level_nodes
+                current_level = level
+                level_nodes = []
+
+            # Add the current node to the current level
+            level_nodes.append(node)
+
+            # Add the children of the current node to the queue
+            for child in node.children:
+                queue.append((child, level + 1))
+
+        # Yield the last level
+        if level_nodes:
+            yield current_level, level_nodes
+
+    def compute_distance_metric(self, distance_function) -> None:
+        '''Computes the distance metric for the node and its children.
+        
+        Args:
+            distance_metric (function): The distance metric function to be applied.
+        '''
+        if self.comparative_vector is not None:
+            self.distance_metric = distance_function(self.contingency_vector, self.comparative_vector)
+        
+        for child in self.children:
+            child.compute_distance_metric(distance_function)
+
+    def get_distance_metric_by_level(self) -> dict:
+        '''Returns the mean distance metric for each level of the tree.
+        
+        Returns:
+            dict: A dictionary where keys are levels and values are their corresponding mean of that metric values.
+        '''
+        metric_by_level = {}
+
+        for level, nodes in self.iterate_by_levels():
+            metrics = [node.distance_metric for node in nodes if node.distance_metric is not None]
+            if metrics:
+                metric_by_level[level] = np.mean(metrics)
+
+        return metric_by_level
+        

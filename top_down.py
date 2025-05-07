@@ -4,10 +4,11 @@ import numpy as np
 import time
 import gurobipy as gp
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, TVD_FLAG
+from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
+from utility import manhattan_distance, euclidean_distance, tvd, cosine_similarity
 from discretegauss import sample_dgauss, sample_dlaplace
 
 class TopDown:
@@ -81,10 +82,6 @@ class TopDown:
         self.geo_tree.construct_tree(GEO_COLUMNS, self.data, self.permutation)
         #Edit Constraint
         self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
-
-        # Make a copy of the vector to compare with the original vector after modifications
-        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
-        
         time2 = time.time()
         print(f'Finished constructing the tree in {time2-time1} seconds.\n')
 
@@ -94,6 +91,7 @@ class TopDown:
         It applies noise to the contingency vector of the geographic tree using the specified noise generation mechanism.
         It considers the privacy parameters (rhos/epsilon) defined in the configuration for each level.
         '''
+        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
         print(f'Measurement phase...')
         self.set_mechanism(MECHANISM)
 
@@ -102,7 +100,7 @@ class TopDown:
         self.apply_noise(self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
-        if TVD_FLAG: print(f'Total Variation Distance (TVD) for the noisy contingency vector: {self.compare_vectors()}')
+        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the noisy contingency vector by levels:\n{self.compare_vectors()}\n')
 
     def estimation_phase(self) -> None:
         '''Estimation phase of the TopDown algorithm.
@@ -112,6 +110,7 @@ class TopDown:
             1. Non-negative estimation of the contingency vector. (Constraints problem)
             2. Non-negative discrete estimation of the previous result. (Rounding problem)
         '''
+        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
         print(f'Estimation phase...')
         print(f'Running estimation for root node...')
         time1 = time.time()
@@ -124,17 +123,13 @@ class TopDown:
         self.recursive_estimation(self.geo_tree)
         time2 = time.time()
         print(f'Finished estimating the solution for children nodes in {time2-time1} seconds.\n')
+        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the estimation phase by levels:\n{self.compare_vectors()}\n')
 
     def root_estimation(self) -> None:
         '''Estimates the contingency vector for the root node of the geographic tree.'''
 
-        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
         x_tilde = self.optimizer.non_negative_real_estimation(self.geo_tree.contingency_vector, self.geo_tree.id, self.geo_tree.constraints)
-        if TVD_FLAG: print(f'Total Variation Distance (TVD) for non-negative real estimation: {self.compare_vectors()}')
-
-        if TVD_FLAG: self.geo_tree.copy_to_comparative_vector()
         self.geo_tree.contingency_vector = self.optimizer.rounding_estimation(x_tilde, self.geo_tree.id, self.geo_tree.constraints)    
-        if TVD_FLAG: print(f'Total Variation Distance (TVD) for rounding estimation: {self.compare_vectors()}')
 
     def recursive_estimation(self, node: GeographicTree) -> None:
         '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
@@ -316,11 +311,23 @@ class TopDown:
         for i in range(len(contingency_vector)):
             contingency_vector[i] += sample_dlaplace(1/epsilon)
 
-    def compare_vectors(self) -> float:
-        '''Compares the contingency vector with the comparative vector. It uses Total Variation Distance (TVD) to measure the difference.
+    def compare_vectors(self) -> dict:
+        '''Compares the contingency vector with the comparative vector at each level of the tree. 
+        It uses the given distance metric to measure the difference.
         
         Returns:
-            float: The Total Variation Distance (TVD) between the contingency vector and the comparative vector.
+            dict: A dictionary with the distance metric for each level of the tree.
         '''
-        self.geo_tree.compare_vectors()
-        return self.geo_tree.TVD
+        match DISTANCE_METRIC:
+            case 'manhattan':
+                distance_function = manhattan_distance
+            case 'euclidean':
+                distance_function = euclidean_distance
+            case 'tvd':
+                distance_function = tvd
+            case 'cosine':
+                distance_function = cosine_similarity
+            case _:
+                raise ValueError(f'Unknown distance metric: {DISTANCE_METRIC}, choose from manhattan, euclidean, tvd or None.')
+        self.geo_tree.compute_distance_metric(distance_function)
+        return self.geo_tree.get_distance_metric_by_level()

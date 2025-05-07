@@ -16,4 +16,4 @@ GEO_CONSTRAINTS = {
     'ZC_LOC': [] # Zona/Localidad
 }
 
-TVD_FLAG = True # Flag to indicate if Total Variation Distance (TVD) should be computed
+DISTANCE_METRIC = 'euclidean' # Distance metric to use (manhattan, euclidean, tvd, cosine) if None no distance will be computed
