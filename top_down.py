@@ -55,15 +55,15 @@ class TopDown:
         # Sort by the columns to ensure a consistent order
         self.permutation.sort_values(by=columns, inplace=True)
 
-    def init_routine(self) -> None:
+    def init_routine(self, data_path=DATA_PATH) -> None:
         '''Initialization the routine for the TopDown class.
         
         This method is used to set up the initial parameters for the TopDown algorithm.
         '''
         # Load the data
         time1 = time.time()
-        print(f'Loading data from {DATA_PATH} with columns {GEO_COLUMNS+QUERIES} ...')
-        self.data = pd.read_csv(DATA_PATH, sep=';', usecols=GEO_COLUMNS+QUERIES)
+        print(f'Loading data from {data_path} with columns {GEO_COLUMNS+QUERIES} ...')
+        self.data = pd.read_csv(data_path, usecols=GEO_COLUMNS+QUERIES, sep=';')
         time2 = time.time()
         print(f'Data loaded in {time2 - time1} seconds.')
         print(f'Data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
@@ -188,7 +188,7 @@ class TopDown:
         time1 = time.time()
         # Convert the dictionary to a DataFrame and return
         noisy_df = pd.DataFrame(microdata_dict)
-        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False)
+        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False, sep=';')
         time2 = time.time()
         print(f'Finished writing microdata in {time2-time1} seconds.\n')
         print(f'Process finished :)\n')
