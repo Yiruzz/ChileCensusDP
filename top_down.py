@@ -78,7 +78,7 @@ class TopDown:
         self.geo_tree = GeographicTree(0)
         # Initialize the contingency vector for the root node
         self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
-        self.geo_tree.construct_tree(GEO_COLUMNS, self.data, self.permutation)
+        self.geo_tree.construct_tree(0, self.data, self.permutation)
         #Edit Constraint
         self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
         
@@ -179,18 +179,19 @@ class TopDown:
         microdata_dict = self.recursive_construct_microdata(self.geo_tree, 0)
         time2 = time.time()
         print(f'Finished constructing microdata in {time2-time1} seconds.\n')
-        
+
         print(f'Writing microdata to {OUTPUT_PATH+OUTPUT_FILE} ...')
         time1 = time.time()
         # Convert the dictionary to a DataFrame and return
         noisy_df = pd.DataFrame(microdata_dict)
-        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False)
+        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False, sep=';')
         time2 = time.time()
         print(f'Finished writing microdata in {time2-time1} seconds.\n')
         print(f'Process finished :)\n')
         return noisy_df
 
     def recursive_construct_microdata(self, node: GeographicTree, current_tree_level: int) -> pd.DataFrame:
+
         '''Recursively calls to construct a microdata of all leaves of the tree.
         
         Args:
@@ -203,7 +204,7 @@ class TopDown:
         # Base case: if the node is a leaf, construct the microdata for that node
         if not node.children:
             # Create a Diccionary to store the microdata for the current node
-            microdata_dict = {col: [] for col in QUERIES}
+            microdata_dict = {col: [] for col in GEO_COLUMNS+QUERIES}
             current_index = 0
             for index, row in self.permutation.iterrows():
                 for col in QUERIES:
@@ -211,7 +212,8 @@ class TopDown:
                     microdata_dict[col].extend(np.repeat(row[col], node.contingency_vector[index]))
             current_index += 1
             # Add the geographic information for the current node
-            microdata_dict[GEO_COLUMNS[current_tree_level-1]] = list(np.repeat(node.id, len(microdata_dict[QUERIES[0]])))
+            for key, val in node.geographic_values.items():
+                microdata_dict[key] = list(np.repeat(val, len(microdata_dict[QUERIES[0]])))
         # Recursive case: if the node has children
         else:
             microdata_dict = {}
@@ -224,10 +226,7 @@ class TopDown:
                         microdata_dict[key].extend(child_microdata[key])
                     else:
                         microdata_dict[key] = child_microdata[key]
-            # Add the geographic information for the current node
-            if current_tree_level != 0:
-                microdata_dict[GEO_COLUMNS[current_tree_level-1]] = list(np.repeat(node.id, len(microdata_dict[QUERIES[0]])))
-        
+                                
         return microdata_dict
     
     def set_mechanism(self, mechanism: str) -> None:
