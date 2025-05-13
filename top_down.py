@@ -53,6 +53,7 @@ class TopDown:
         
         # Sort by the columns to ensure a consistent order
         self.permutation.sort_values(by=columns, inplace=True)
+        self.permutation.reset_index(drop=True, inplace=True)
 
     def init_routine(self) -> None:
         '''Initialization the routine for the TopDown class.
