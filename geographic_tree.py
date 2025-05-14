@@ -1,6 +1,7 @@
 from collections import deque
 import numpy as np
 import pandas as pd
+from collections import deque
 
 from config import GEO_COLUMNS, QUERIES, GEO_CONSTRAINTS
 
@@ -97,18 +98,27 @@ class GeographicTree:
                 # Add the child node to the current node
                 self.add_child(child_node)
 
-    def apply_noise(self, mechanism, rhos: float) -> None:
-        '''Applies noise to the contingency vector using the specified mechanism. Also calls the same method for all child nodes.
+    def apply_noise(self, mechanism, rhos: list) -> None:
+        '''Applies noise to all the contingency vectors of the tree with the specified mechanism.
         
+        The iteration is done in a breath-first manner, starting from the root node and going down by levels of the tree.
+
         Args:
             mechanism (function): The noise generation function.
-            rho (float): The privacy parameter.
+            rho (list): A list containing the privacy parameters for each level of the tree.
         '''
-        if self.contingency_vector is not None and rhos:
-            mechanism(self.contingency_vector, rhos[0])
-        
-        for child in self.children:
-            child.apply_noise(mechanism, rhos[1:])
+        # BFS
+        queue = deque([(self, 0)])   
+        while queue:
+            node, current_level = queue.popleft()
+
+            # Apply noise to the contingency vector of the current node
+            if node.contingency_vector is not None:
+                mechanism(node.contingency_vector, rhos[current_level])
+
+            # Add the children of the current node to the queue
+            for child in node.children:
+                queue.append((child, current_level + 1))
 
     def count_nodes(self) -> int:
         '''Counts the number of nodes in the tree.
