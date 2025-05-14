@@ -2,7 +2,7 @@ import pandas as pd
 from itertools import product
 import numpy as np
 import time
-import gurobipy as gp
+from collections import deque
 
 from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE
 from geographic_tree import GeographicTree
@@ -131,42 +131,50 @@ class TopDown:
     def recursive_estimation(self, node: GeographicTree) -> None:
         '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
         
-        if not node.children: return # Base case
+        queue = deque([(node, 0)])
+        level = 0
+        while queue:
+            node, current_level = queue.popleft()
+            if level != current_level:
+                level = current_level
+                print(f'Running estimation for level {level}...')
 
-        childs_contingency_vectors = [child.contingency_vector for child in node.children]
-        joint_contingency_vector = np.concatenate(childs_contingency_vectors)
+            if not node.children: continue # Skip nodes without children
+            
+            childs_contingency_vectors = [child.contingency_vector for child in node.children]
+            joint_contingency_vector = np.concatenate(childs_contingency_vectors)
 
-        # Construct the new constraints for the joint contingency vector
-        constraints = []
-        vectors_length = self.permutation.shape[0]
-        start = 0
-        for child in node.children:
-            end = start + vectors_length
-            for constraint in child.constraints:
-                # NOTE: We need to use default arguments to avoid late binding issues in lambda functions.
-                constraints.append(lambda x, s=start, e=end, c=constraint: c(x[s:e]))
+            # Construct the new constraints for the joint contingency vector
+            constraints = []
+            vectors_length = self.permutation.shape[0]
+            start = 0
+            for child in node.children:
+                end = start + vectors_length
+                for constraint in child.constraints:
+                    # NOTE: We need to use default arguments to avoid late binding issues in lambda functions.
+                    constraints.append(lambda x, s=start, e=end, c=constraint: c(x[s:e]))
 
-            start = end
-        
-        # Add constraints for consistency of the values of different child nodes
-        for index in range(vectors_length):
-            constraints.append(lambda joint_vector, s=index, value=node.contingency_vector[index]: 
-                               joint_vector[s::vectors_length].sum() == value)
-        
-        # Estimate the solution for the joint contingency vector
-        x_tilde = self.optimizer.non_negative_real_estimation(joint_contingency_vector, node.id, constraints)
-        joint_solution = self.optimizer.rounding_estimation(x_tilde, node.id, constraints)
-        
-        # Split the joint solution into the contingency vectors for each child node
-        start = 0
-        for child in node.children:
-            end = start + vectors_length
-            child.contingency_vector = joint_solution[start:end]
-            start = end
+                start = end
+            
+            # Add constraints for consistency of the values of different child nodes
+            for index in range(vectors_length):
+                constraints.append(lambda joint_vector, s=index, value=node.contingency_vector[index]: 
+                                joint_vector[s::vectors_length].sum() == value)
+            
+            # Estimate the solution for the joint contingency vector
+            x_tilde = self.optimizer.non_negative_real_estimation(joint_contingency_vector, node.id, constraints)
+            joint_solution = self.optimizer.rounding_estimation(x_tilde, node.id, constraints)
+            
+            # Split the joint solution into the contingency vectors for each child node
+            start = 0
+            for child in node.children:
+                end = start + vectors_length
+                child.contingency_vector = joint_solution[start:end]
+                start = end
 
-        # Recursively call the function for each child node
-        for child in node.children:
-            self.recursive_estimation(child)
+            # Add each child node to the queue for further processing
+            for child in node.children:
+                queue.append((child, current_level + 1))
 
     def construct_microdata(self) -> pd.DataFrame:
         '''Constructs the microdata from the contingency vector of the geographic tree.

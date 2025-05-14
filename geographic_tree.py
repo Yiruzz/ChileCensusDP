@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from collections import deque
 
 from config import GEO_COLUMNS, QUERIES, GEO_CONSTRAINTS
 
@@ -106,7 +107,7 @@ class GeographicTree:
 
             # Apply noise to the contingency vector of the current node
             if node.contingency_vector is not None:
-                node.contingency_vector = mechanism(node.contingency_vector, rhos[current_level])
+                mechanism(node.contingency_vector, rhos[current_level])
 
             # Add the children of the current node to the queue
             for child in node.children:
