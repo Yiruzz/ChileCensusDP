@@ -4,10 +4,11 @@ import numpy as np
 import time
 import gurobipy as gp
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE
+from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
+from utility import manhattan_distance, euclidean_distance, tvd, cosine_similarity
 from discretegauss import sample_dgauss, sample_dlaplace
 
 class TopDown:
@@ -55,15 +56,15 @@ class TopDown:
         self.permutation.sort_values(by=columns, inplace=True)
         self.permutation.reset_index(drop=True, inplace=True)
 
-    def init_routine(self) -> None:
+    def init_routine(self, data_path=DATA_PATH) -> None:
         '''Initialization the routine for the TopDown class.
         
         This method is used to set up the initial parameters for the TopDown algorithm.
         '''
         # Load the data
         time1 = time.time()
-        print(f'Loading data from {DATA_PATH} with columns {GEO_COLUMNS+QUERIES} ...')
-        self.data = pd.read_csv(DATA_PATH, sep=';', usecols=GEO_COLUMNS+QUERIES)
+        print(f'Loading data from {data_path} with columns {GEO_COLUMNS+QUERIES} ...')
+        self.data = pd.read_csv(data_path, usecols=GEO_COLUMNS+QUERIES, sep=';')
         time2 = time.time()
         print(f'Data loaded in {time2 - time1} seconds.')
         print(f'Data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
@@ -82,7 +83,6 @@ class TopDown:
         self.geo_tree.construct_tree(0, self.data, self.permutation)
         #Edit Constraint
         self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
-        
         time2 = time.time()
         print(f'Finished constructing the tree in {time2-time1} seconds.\n')
 
@@ -92,6 +92,7 @@ class TopDown:
         It applies noise to the contingency vector of the geographic tree using the specified noise generation mechanism.
         It considers the privacy parameters (rhos/epsilon) defined in the configuration for each level.
         '''
+        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
         print(f'Measurement phase...')
         self.set_mechanism(MECHANISM)
 
@@ -100,6 +101,7 @@ class TopDown:
         self.apply_noise(self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
+        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the noisy contingency vector by levels:\n{self.compare_vectors()}\n')
 
     def estimation_phase(self) -> None:
         '''Estimation phase of the TopDown algorithm.
@@ -109,6 +111,7 @@ class TopDown:
             1. Non-negative estimation of the contingency vector. (Constraints problem)
             2. Non-negative discrete estimation of the previous result. (Rounding problem)
         '''
+        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
         print(f'Estimation phase...')
         print(f'Running estimation for root node...')
         time1 = time.time()
@@ -121,6 +124,7 @@ class TopDown:
         self.recursive_estimation(self.geo_tree)
         time2 = time.time()
         print(f'Finished estimating the solution for children nodes in {time2-time1} seconds.\n')
+        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the estimation phase by levels:\n{self.compare_vectors()}\n')
 
     def root_estimation(self) -> None:
         '''Estimates the contingency vector for the root node of the geographic tree.'''
@@ -306,3 +310,24 @@ class TopDown:
         # TODO: Refactor to generalize the sensitivity
         for i in range(len(contingency_vector)):
             contingency_vector[i] += sample_dlaplace(1/epsilon)
+
+    def compare_vectors(self) -> dict:
+        '''Compares the contingency vector with the comparative vector at each level of the tree. 
+        It uses the given distance metric to measure the difference.
+        
+        Returns:
+            dict: A dictionary with the distance metric for each level of the tree.
+        '''
+        match DISTANCE_METRIC:
+            case 'manhattan':
+                distance_function = manhattan_distance
+            case 'euclidean':
+                distance_function = euclidean_distance
+            case 'tvd':
+                distance_function = tvd
+            case 'cosine':
+                distance_function = cosine_similarity
+            case _:
+                raise ValueError(f'Unknown distance metric: {DISTANCE_METRIC}, choose from manhattan, euclidean, tvd or None.')
+        self.geo_tree.compute_distance_metric(distance_function)
+        return self.geo_tree.get_distance_metric_by_level()
