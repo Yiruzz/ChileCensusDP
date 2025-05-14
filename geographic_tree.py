@@ -30,6 +30,7 @@ class GeographicTree:
 
         self.constraints = None
 
+        # NOTE: These are only used when a distance metric is defined in config.py
         self.comparative_vector = None
         self.distance_metric = None
 

@@ -16,4 +16,4 @@ GEO_CONSTRAINTS = {
     'ZC_LOC': [] # Zona/Localidad
 }
 
-DISTANCE_METRIC = 'euclidean' # Distance metric to use (manhattan, euclidean, tvd, cosine) if None no distance will be computed
+DISTANCE_METRIC = None # Distance metric to use (manhattan, euclidean, tvd, cosine) if None no distance will be computed
