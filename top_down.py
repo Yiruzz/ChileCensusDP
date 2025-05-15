@@ -4,7 +4,7 @@ import numpy as np
 import time
 from collections import deque
 
-from config import DATA_PATH, GEO_COLUMNS_TO_USE, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
+from config import DATA_PATH, DATA_PATH_PROCESSED, GEO_COLUMNS_TO_USE, PROCESS_UNTIL, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
@@ -98,7 +98,7 @@ class TopDown:
 
         print(f'Applying noise using {MECHANISM} mechanism with privacy parameters {self.privacy_budgets} ...')
         time1 = time.time()
-        self.apply_noise(self.noise_mechanism, self.privacy_budgets)
+        self.apply_noise(self.geo_tree, self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
         if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the noisy contingency vector by levels:\n{self.compare_vectors()}\n')
@@ -135,8 +135,8 @@ class TopDown:
     def recursive_estimation(self, node: GeographicTree) -> None:
         '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
         
-        queue = deque([(node, 0)])
-        level = 0
+        level = len(node.geographic_values.keys()) - 1
+        queue = deque([(node, level)])
         time1 = time.time()
         print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
         while queue:
@@ -258,15 +258,15 @@ class TopDown:
         elif mechanism == 'discrete_laplace':
             self.noise_mechanism = self.discrete_laplace
 
-    def apply_noise(self, mechanism, rhos: float) -> None:
-        '''Applies noise to the contingency vector using the specified mechanism.
+    def apply_noise(self, node: GeographicTree, mechanism, privacy_parameters: list) -> None:
+        '''Applies noise to the tree contingency vectors using the specified mechanism.
         
         Args:
             mechanism (function): The noise generation function.
-            rho (float): The privacy parameter.
+            privacy_parameters (list): The privacy parameters for each level.
         '''
-        if self.geo_tree is not None:
-            self.geo_tree.apply_noise(mechanism, rhos)
+        if node is not None:
+            node.apply_noise(mechanism, privacy_parameters)
 
     def check_correctness(self) -> None:
         '''Checks the correctness of the tree structure considering that its childs sums up to the parent node.
@@ -355,3 +355,86 @@ class TopDown:
         self.measurement_phase()
         self.estimation_phase()
         return self.construct_microdata()
+    
+    
+    def load_state(self) -> None:
+        '''Loads the state of a previous run of the TopDown algorithm from a file.'''
+        self.data = pd.read_csv(DATA_PATH_PROCESSED, sep=';')
+        self.compute_permutation(QUERIES)
+        self.geo_tree = GeographicTree(0)
+        self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
+        self.geo_tree.construct_tree(0, self.data, self.permutation)
+
+        print(f'Number of nodes: {self.geo_tree.count_nodes()}')
+
+    def extend_tree(self) -> tuple[list, int]:
+        '''Extends the tree to include the new data.
+        
+        Returns:
+            list (int, list(GeographicTree)): A list of tuples where each tuple contains the level and a list of nodes at that level.
+            int: The level of the last level processed in a previous run of the algorithm.
+        '''
+        self.data = pd.read_csv(DATA_PATH, usecols=GEO_COLUMNS_TO_USE+QUERIES, sep=';')        
+        level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation)
+        print(f'Number of nodes: {self.geo_tree.count_nodes()}')
+        self.data = None
+        return level_nodes, last_processed_level
+
+    def resume_measurement_phase(self, level_nodes, last_processed_level) -> None:
+        '''Resumes the measurement phase of the TopDown algorithm from a previous state.
+        
+        It adds noise to the contingency vector of the new geographic nodes added to the tree.
+
+        Args:
+            level_nodes (list): A list of tuples where each tuple contains the level and a list of nodes at that level.
+            last_processed_level (int): The level of the last level processed in a previous run of the algorithm.
+        '''
+        _, nodes_to_noisify = level_nodes[last_processed_level+1]
+        privacy_parameters_to_use = self.privacy_budgets[last_processed_level+1:]
+
+        self.set_mechanism(MECHANISM)
+
+        for node in nodes_to_noisify:
+            self.apply_noise(node, self.noise_mechanism, privacy_parameters_to_use)
+
+    def resume_estimation_phase(self, level_nodes, last_processed_level) -> None:
+        '''Resumes the estimation phase of the TopDown algorithm from a previous state.
+        
+        It estimates the contingency vector of the new geographic nodes added to the tree.
+
+        Args:
+            level_nodes (list): A list of tuples where each tuple contains the level and a list of nodes at that level.
+            last_processed_level (int): The level of the last level processed in a previous run of the algorithm.
+        '''
+        _, nodes_to_estimate = level_nodes[last_processed_level]
+        for node in nodes_to_estimate:
+            self.recursive_estimation(node)
+
+    def resume_run(self) -> pd.DataFrame:
+        '''Resumes the run of the TopDown algorithm from a previous state.
+        
+        Returns:
+            pd.DataFrame: The final dataframe with the DP-data.
+        '''
+        time1 = time.time()
+        print(f'Recovering state from previous run considering {DATA_PATH_PROCESSED} data...')
+        self.load_state()
+        print(f'Finished recovering state in {time.time()-time1} seconds.\n')
+
+        time1 = time.time()
+        print(f'Extending the tree with new data from {DATA_PATH} until reaching {PROCESS_UNTIL} granularity...')
+        level_nodes, last_processed_level = self.extend_tree()
+        print(f'Finished extending the tree in {time.time()-time1} seconds.\n')
+
+        time1 = time.time()
+        print(f'Running measurement phase for the new data...')
+        self.resume_measurement_phase(level_nodes, last_processed_level)
+        print(f'Finished measurement phase in {time.time()-time1} seconds.\n')
+
+        time1 = time.time()
+        print(f'Running estimation phase for the new data...')
+        self.resume_estimation_phase(level_nodes, last_processed_level)
+        print(f'Finished estimation phase in {time.time()-time1} seconds.\n')
+        
+        return self.construct_microdata()
+

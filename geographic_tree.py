@@ -74,21 +74,29 @@ class GeographicTree:
             df (pd.DataFrame): The dataframe containing the data.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
         '''
-        if current_level < len(GEO_COLUMNS_TO_USE):
-            location_ids = df[GEO_COLUMNS_TO_USE[current_level]].unique()
+        last_geo_column_index = 0
+        for i in GEO_COLUMNS_TO_USE:
+            if i not in df.columns:
+                break
+            last_geo_column_index += 1
+        
+        present_geo_columns = GEO_COLUMNS_TO_USE[:last_geo_column_index]
+
+        if current_level < len(present_geo_columns):
+            location_ids = df[present_geo_columns[current_level]].unique()
 
             for location_id in location_ids:
                 # Filter the dataframe for the current location ID
-                filtered_df = df[df[GEO_COLUMNS_TO_USE[current_level]] == location_id]
+                filtered_df = df[df[present_geo_columns[current_level]] == location_id]
                 
                 # Create a new child node with the filtered data
                 child_node = GeographicTree(location_id)
-                for geo_label in GEO_COLUMNS_TO_USE[:current_level+1]:
+                for geo_label in present_geo_columns[:current_level+1]:
                     # Set the geographic values for the child node
                     child_node.geographic_values[geo_label] = filtered_df[geo_label].unique()[0]
 
                 # Add edit constraints for the child node       
-                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[GEO_COLUMNS_TO_USE[current_level]]]
+                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[present_geo_columns[current_level]]]
 
                 # Construct the contingency vector for the child node
                 child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
@@ -192,4 +200,59 @@ class GeographicTree:
                 metric_by_level[level] = np.mean(metrics)
 
         return metric_by_level
+
+    def extend_tree(self, raw_data: pd.DataFrame, permutation: pd.DataFrame) -> tuple[list, int]:
+        '''Extends the tree with the raw data and the permutation.
+        
+        Args:
+            raw_data (pd.DataFrame): The raw data to be used for extending the tree.
+            permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
+
+        Returns:
+            list (int, list(GeographicTree)): A list of tuples where each tuple contains the level and a list of nodes at that level.
+            int: The level of the last level processed in a previous run of the algorithm.
+        '''
+        level_nodes = list(self.iterate_by_levels())
+        last_processed_level, last_processed_nodes = level_nodes[-1]
+        new_level = last_processed_level
+        
+        # Case no new nodes to process
+        if last_processed_level >= len(GEO_COLUMNS_TO_USE):
+            raise ValueError("The tree has already been fully processed. Consider incrementing the level of granularity")
+        
+        # Iterate over the new geographic labels to process to create new nodes
+        for label_to_process in GEO_COLUMNS_TO_USE[last_processed_level:]:
+            new_childs = []
+            for processed_node in last_processed_nodes:
+                # Filter the raw data using the dictionary of the processed node
+                for key, value in processed_node.geographic_values.items():
+                    filtered_df = raw_data[raw_data[key] == value]
+            
+                for location_id in filtered_df[label_to_process].unique():
+                    # Filter the raw data for the current location ID
+                    filtered_df = filtered_df[filtered_df[label_to_process] == location_id]
+                    
+                    # Create a new child node with the filtered data
+                    child_node = GeographicTree(location_id)
+                    child_node.geographic_values = processed_node.geographic_values.copy()
+                    child_node.geographic_values[label_to_process] = location_id
+
+                    # Add edit constraints for the child node       
+                    child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[label_to_process]]
+
+                    # Construct the contingency vector for the child node
+                    child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
+
+                    # Add the child node to the current node
+                    processed_node.add_child(child_node)
+
+                    # Add the child node to the list of new childs
+                    new_childs.append(child_node)
+
+        
+            last_processed_nodes = new_childs.copy()
+            new_level += 1
+            level_nodes.append((new_level, last_processed_nodes))
+
+        return level_nodes, last_processed_level
 
