@@ -339,3 +339,14 @@ class TopDown:
                 raise ValueError(f'Unknown distance metric: {DISTANCE_METRIC}, choose from manhattan, euclidean, tvd or None.')
         self.geo_tree.compute_distance_metric(distance_function)
         return self.geo_tree.get_distance_metric_by_level()
+    
+    def run(self) -> pd.DataFrame:
+        '''Runs the TopDown alogorithm
+        
+        Returns:
+            pd.DataFrame: The final dataframe with the DP-data.
+        '''
+        self.init_routine()
+        self.measurement_phase()
+        self.estimation_phase()
+        return self.construct_microdata()

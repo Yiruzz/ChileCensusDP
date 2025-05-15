@@ -192,4 +192,4 @@ class GeographicTree:
                 metric_by_level[level] = np.mean(metrics)
 
         return metric_by_level
-        
+
