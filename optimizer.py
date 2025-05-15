@@ -16,8 +16,11 @@ class OptimizationModel:
         '''
         self.model = gp.Model(f'NonNegativeRealEstimation. NodeID: {id_node}')
         self.model.setParam('OutputFlag', 0)  # Suppress Gurobi output
+
+        self.model.setParam('OptimalityTol', 1e-4)  # Approximate optimality tolerance (default: 1e-6, min: 1e-9, max: 1e-2)
+        self.model.setParam('BarConvTol', 1e-6) # Tolerance for barrier convergence (default 1e-8, min: 0.0, max: 1.0)
+
         self.model.setParam('TimeLimit', 60)  # Stop after 60 seconds
-        # self.model.setParam('MIPGap', .1)  # Allow a 10% relative gap
         # self.model.setParam('Heuristics', .5)  # Allocate 50% of time to heuristics
         n = len(contingency_vector)
         
