@@ -1,17 +1,16 @@
 # Geographic columns used to build the geographic tree (from highest to lowest granularity)
 GEO_COLUMNS = ['REGION', 'PROVINCIA', 'COMUNA', 'DC', 'ZC_LOC'] # Region, Provincia, Comuna, Distrito Censal, Zona/Localidad
-
-# Process until this level of granularity (REGION, PROVINCIA, COMUNA, DC, ZC_LOC) 
 PROCESS_UNTIL = 'COMUNA'
+GEO_COLUMNS_TO_USE = GEO_COLUMNS[:GEO_COLUMNS.index(PROCESS_UNTIL) + 1]
 
 # Queries to be answered (column names in the census data)
-QUERIES = ['P08', 'P09'] # Sex and Age
+QUERIES = ['P08'] # Sex and Age
 
 # Path to the raw original census data file (CSV)
 DATA_PATH = 'data/csv-personas-censo-2017/microdato_censo2017-personas/Microdato_Censo2017-Personas.csv'
 
 OUTPUT_PATH = 'data/out/'
-OUTPUT_FILE = 'personas_noisy_microdata_comuna_P08P09.csv'
+OUTPUT_FILE = 'personas_noisy_microdata_comuna_P08.csv'
 
 # Privacy parameters for the noise generation. First value for root, last for leaves.
 PRIVACY_PARAMETERS = [.1, .2, .4, .8, 1.6, 3.2]

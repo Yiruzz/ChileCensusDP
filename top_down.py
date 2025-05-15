@@ -4,11 +4,11 @@ import numpy as np
 import time
 from collections import deque
 
-from config import DATA_PATH, GEO_COLUMNS, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
+from config import DATA_PATH, GEO_COLUMNS_TO_USE, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
-from utility import manhattan_distance, euclidean_distance, tvd, cosine_similarity
+from utils import manhattan_distance, euclidean_distance, tvd, cosine_similarity
 from discretegauss import sample_dgauss, sample_dlaplace
 
 class TopDown:
@@ -63,8 +63,8 @@ class TopDown:
         '''
         # Load the data
         time1 = time.time()
-        print(f'Loading data from {data_path} with columns {GEO_COLUMNS+QUERIES} ...')
-        self.data = pd.read_csv(data_path, usecols=GEO_COLUMNS+QUERIES, sep=';')
+        print(f'Loading data from {data_path} with columns {GEO_COLUMNS_TO_USE+QUERIES} ...')
+        self.data = pd.read_csv(data_path, usecols=GEO_COLUMNS_TO_USE+QUERIES, sep=';')
         time2 = time.time()
         print(f'Data loaded in {time2 - time1} seconds.')
         print(f'Data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
@@ -137,11 +137,16 @@ class TopDown:
         
         queue = deque([(node, 0)])
         level = 0
+        time1 = time.time()
+        print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
         while queue:
             node, current_level = queue.popleft()
             if level != current_level:
+                print(round(time.time() - time1, 4), 'seconds.')
                 level = current_level
-                print(f'Running estimation for level {level}...')
+                if current_level < len(GEO_COLUMNS_TO_USE):
+                    print(f'Running estimation for {GEO_COLUMNS_TO_USE[current_level]}...', end=' ')
+                    time1 = time.time()
 
             if not node.children: continue # Skip nodes without children
             
@@ -217,7 +222,7 @@ class TopDown:
         # Base case: if the node is a leaf, construct the microdata for that node
         if not node.children:
             # Create a Diccionary to store the microdata for the current node
-            microdata_dict = {col: [] for col in GEO_COLUMNS+QUERIES}
+            microdata_dict = {col: [] for col in GEO_COLUMNS_TO_USE+QUERIES}
             current_index = 0
             for index, row in self.permutation.iterrows():
                 for col in QUERIES:

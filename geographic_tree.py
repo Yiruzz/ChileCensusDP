@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 
-from config import GEO_COLUMNS, QUERIES, GEO_CONSTRAINTS
+from config import GEO_COLUMNS_TO_USE, QUERIES, GEO_CONSTRAINTS
 
 class GeographicTree:
     '''Represents a tree structure for geographic data. Each node can have multiple children.'''
@@ -74,21 +74,21 @@ class GeographicTree:
             df (pd.DataFrame): The dataframe containing the data.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
         '''
-        if current_level < len(GEO_COLUMNS):
-            location_ids = df[GEO_COLUMNS[current_level]].unique()
+        if current_level < len(GEO_COLUMNS_TO_USE):
+            location_ids = df[GEO_COLUMNS_TO_USE[current_level]].unique()
 
             for location_id in location_ids:
                 # Filter the dataframe for the current location ID
-                filtered_df = df[df[GEO_COLUMNS[current_level]] == location_id]
+                filtered_df = df[df[GEO_COLUMNS_TO_USE[current_level]] == location_id]
                 
                 # Create a new child node with the filtered data
                 child_node = GeographicTree(location_id)
-                for geo_label in GEO_COLUMNS[:current_level+1]:
+                for geo_label in GEO_COLUMNS_TO_USE[:current_level+1]:
                     # Set the geographic values for the child node
                     child_node.geographic_values[geo_label] = filtered_df[geo_label].unique()[0]
 
                 # Add edit constraints for the child node       
-                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[GEO_COLUMNS[current_level]]]
+                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[GEO_COLUMNS_TO_USE[current_level]]]
 
                 # Construct the contingency vector for the child node
                 child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
