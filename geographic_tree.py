@@ -149,7 +149,11 @@ class GeographicTree:
             child.copy_to_comparative_vector()
 
     def iterate_by_levels(self):
-        '''Iterates over the tree level by level and yields nodes at each level.'''
+        '''Iterates over the tree level by level and yields nodes at each level.
+        
+        Returns:
+            generator: A generator that yields tuples of (level, list of nodes at that level).
+        '''
         queue = deque([(self, 0)])  # Start with the root node and level 0
         current_level = 0
         level_nodes = []
