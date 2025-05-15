@@ -1,19 +1,37 @@
+# Geographic columns used to build the geographic tree (from highest to lowest granularity)
 GEO_COLUMNS = ['REGION', 'PROVINCIA', 'COMUNA', 'DC', 'ZC_LOC'] # Region, Provincia, Comuna, Distrito Censal, Zona/Localidad
-QUERIES = ['P08'] # Sex and Age
-DATA_PATH = 'data/csv-personas-censo-2017/microdato_censo2017-personas/Microdato_Censo2017-Personas.csv'
-OUTPUT_PATH = 'data/out/' # Path to save the output files
-OUTPUT_FILE = 'personas_noisy_microdata_P08.csv' # Name of the output file
 
+# Process until this level of granularity (REGION, PROVINCIA, COMUNA, DC, ZC_LOC) 
+PROCESS_UNTIL = 'COMUNA'
+
+# Queries to be answered (column names in the census data)
+QUERIES = ['P08', 'P09'] # Sex and Age
+
+# Path to the raw original census data file (CSV)
+DATA_PATH = 'data/csv-personas-censo-2017/microdato_censo2017-personas/Microdato_Censo2017-Personas.csv'
+
+OUTPUT_PATH = 'data/out/'
+OUTPUT_FILE = 'personas_noisy_microdata_comuna_P08P09.csv'
+
+# Privacy parameters for the noise generation. First value for root, last for leaves.
 PRIVACY_PARAMETERS = [.1, .2, .4, .8, 1.6, 3.2]
-MECHANISM = 'discrete_laplace' # Mechanism to use for noise generation (discrete_gaussian or discrete_laplace)
+
+ # Mechanism to use for noise generation (discrete_gaussian or discrete_laplace)
+MECHANISM = 'discrete_laplace'
 
 # Edit Constraints
 GEO_CONSTRAINTS = {
-    'REGION': [lambda x, y: x.sum() == y], # Region
-    'PROVINCIA': [lambda x, y: x.sum() == y], # Provincia
-    'COMUNA': [], # Comuna
-    'DC': [], # Distrito Censal
-    'ZC_LOC': [] # Zona/Localidad
+    'REGION': [lambda x, y: x.sum() == y],
+    'PROVINCIA': [lambda x, y: x.sum() == y],
+    'COMUNA': [],
+    'DC': [],
+    'ZC_LOC': []
 }
 
-DISTANCE_METRIC = None # Distance metric to use (manhattan, euclidean, tvd, cosine) if None no distance will be computed
+# Path of data that already has been processed
+# This is used to avoid reprocessing the data if it has already been processed.
+DATA_PATH_PROCESSED = 'data/out/temporal/personas_noisy_microdata_comuna_P08P09.csv' 
+
+# Distance metric to use (manhattan, euclidean, cosine) if None no distance will be computed.
+# Only used for testing and analysis purposes.
+DISTANCE_METRIC = None
