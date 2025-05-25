@@ -138,10 +138,10 @@ class TopDown:
         level = len(node.geographic_values.keys()) - 1
         queue = deque([(node, level)])
         time1 = time.time()
-        print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
+        if not DATA_PATH_PROCESSED: print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
         while queue:
             node, current_level = queue.popleft()
-            if level != current_level:
+            if not DATA_PATH_PROCESSED and level != current_level:
                 print(round(time.time() - time1, 4), 'seconds.')
                 level = current_level
                 if current_level < len(GEO_COLUMNS_TO_USE):
@@ -209,7 +209,6 @@ class TopDown:
         return noisy_df
 
     def recursive_construct_microdata(self, node: GeographicTree, current_tree_level: int) -> pd.DataFrame:
-
         '''Recursively calls to construct a microdata of all leaves of the tree.
         
         Args:
@@ -365,8 +364,6 @@ class TopDown:
         self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
         self.geo_tree.construct_tree(0, self.data, self.permutation)
 
-        print(f'Number of nodes: {self.geo_tree.count_nodes()}')
-
     def extend_tree(self) -> tuple[list, int]:
         '''Extends the tree to include the new data.
         
@@ -376,7 +373,6 @@ class TopDown:
         '''
         self.data = pd.read_csv(DATA_PATH, usecols=GEO_COLUMNS_TO_USE+QUERIES, sep=';')        
         level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation)
-        print(f'Number of nodes: {self.geo_tree.count_nodes()}')
         self.data = None
         return level_nodes, last_processed_level
 
@@ -433,6 +429,7 @@ class TopDown:
 
         time1 = time.time()
         print(f'Running estimation phase for the new data...')
+        print(f'Starting at level of {GEO_COLUMNS_TO_USE[last_processed_level]}...')
         self.resume_estimation_phase(level_nodes, last_processed_level)
         print(f'Finished estimation phase in {time.time()-time1} seconds.\n')
         
