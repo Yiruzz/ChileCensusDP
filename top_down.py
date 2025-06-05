@@ -135,7 +135,7 @@ class TopDown:
     def recursive_estimation(self, node: GeographicTree) -> None:
         '''Recursively estimates the contingency vector for the children nodes of the geographic tree.'''
         
-        level = len(node.geographic_values.keys()) - 1
+        level = len(node.geographic_values.keys())
         queue = deque([(node, level)])
         time1 = time.time()
         if not DATA_PATH_PROCESSED: print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
