@@ -1,13 +1,13 @@
 from top_down import TopDown
 import numpy as np
-from utility import tvd
+from utils import tvd
 
 def main():
     init_data = TopDown()
     init_data.init_routine()
 
     out_data = TopDown()
-    out_data.init_routine('C:/Users/artur/Desktop/Memoria/ChileCensusDP/data/out/personas_noisy_microdata_P08P09.csv')
+    out_data.init_routine('C:/Users/artur/Desktop/Memoria/ChileCensusDP/data/out/personas_noisy_microdata_DC_APPROX_P08P09.csv')
 
     # Compare the trees
     tvd_by_level = compare_trees_by_tvd(init_data.geo_tree, out_data.geo_tree)
