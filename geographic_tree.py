@@ -3,11 +3,10 @@ import numpy as np
 import pandas as pd
 from collections import deque
 
-from config import GEO_COLUMNS_TO_USE, QUERIES, GEO_CONSTRAINTS
 
 class GeographicTree:
     '''Represents a tree structure for geographic data. Each node can have multiple children.'''
-    def __init__(self, id):
+    def __init__(self, id, constraints=None, distance_metric=None):
         '''Constructor of the GeographicTree class.
         
         Args:
@@ -28,37 +27,37 @@ class GeographicTree:
         self.children = []
         self.contingency_vector = None
 
-        self.constraints = None
+        self.constraints = constraints
 
         # NOTE: These are only used when a distance metric is defined in config.py
         self.comparative_vector = None
-        self.distance_metric = None
+        self.distance_metric = distance_metric
 
     def add_child(self, child):
         '''Adds a child node to the current node.'''
         self.children.append(child)
 
-    def construct_contingency_vector(self, df: pd.DataFrame, permutation) -> np.array:
+    def construct_contingency_vector(self, df: pd.DataFrame, permutation, queries: list) -> np.array:
         '''Constructs the contingency vector for the permutation saved.
         
         Args:
             df (pd.DataFrame): The dataframe to calculate the contingency vector.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
                
-        Returns:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+        Returns:                                                                                     
             np.array: The contingency vector.
         '''
         # Group the data by the permutation columns and count occurrences
-        grouped = df.groupby(QUERIES).size().reset_index(name='frequency')
+        grouped = df.groupby(queries).size().reset_index(name='frequency')
 
         # Merge to get frequencies that are not present in the given data.
-        merged = pd.merge(permutation, grouped, how='left', on=QUERIES).fillna(0)
+        merged = pd.merge(permutation, grouped, how='left', on=queries).fillna(0)
 
         # Pivot vector to create the contingency vector
         contingency_vector = pd.pivot_table(
             merged,
-            index=QUERIES[:-1], 
-            columns=QUERIES[-1], 
+            index=queries[:-1], 
+            columns=queries[-1], 
             values='frequency', 
             fill_value=0, 
             aggfunc=lambda x: x)
@@ -66,21 +65,24 @@ class GeographicTree:
         # Return the contingency vector as a numpy array
         return contingency_vector.to_numpy(dtype=int).flatten()
     
-    def construct_tree(self, current_level: int, df: pd.DataFrame, permutation: pd.DataFrame) -> None:
+    def construct_tree(self, current_level: int, df: pd.DataFrame, permutation: pd.DataFrame, geo_columns: list, queries: list, constraints_dict: dict) -> None:
         '''Constructs the geographic tree based on the provided labels and dataframe.
         
         Args:
-            geo_labels (list): The labels for the geographic locations.
+            current_level (int): The current level of the geographic hierarchy being processed.
             df (pd.DataFrame): The dataframe containing the data.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
+            queries (list): A list of queries to be answered.
+            geo_columns (list): A list of geographic columns to be used for constructing the tree.
+            constraints_dict (dict): A dictionary containing the edit constraints for each geographic column.
         '''
         last_geo_column_index = 0
-        for i in GEO_COLUMNS_TO_USE:
+        for i in geo_columns:
             if i not in df.columns:
                 break
             last_geo_column_index += 1
         
-        present_geo_columns = GEO_COLUMNS_TO_USE[:last_geo_column_index]
+        present_geo_columns = geo_columns[:last_geo_column_index]
 
         if current_level < len(present_geo_columns):
             location_ids = df[present_geo_columns[current_level]].unique()
@@ -96,13 +98,13 @@ class GeographicTree:
                     child_node.geographic_values[geo_label] = filtered_df[geo_label].unique()[0]
 
                 # Add edit constraints for the child node       
-                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[present_geo_columns[current_level]]]
+                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in constraints_dict[present_geo_columns[current_level]]]
 
                 # Construct the contingency vector for the child node
-                child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
+                child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation, queries)
 
                 # Recursively construct childs for the child node
-                child_node.construct_tree(current_level+1, filtered_df, permutation)
+                child_node.construct_tree(current_level+1, filtered_df, permutation, geo_columns, queries, constraints_dict)
                 
                 # Add the child node to the current node
                 self.add_child(child_node)
@@ -205,7 +207,7 @@ class GeographicTree:
 
         return metric_by_level
 
-    def extend_tree(self, raw_data: pd.DataFrame, permutation: pd.DataFrame) -> tuple[list, int]:
+    def extend_tree(self, raw_data: pd.DataFrame, permutation: pd.DataFrame, geo_columns: list, constraints_dict: dict) -> tuple[list, int]:
         '''Extends the tree with the raw data and the permutation.
         
         Args:
@@ -221,11 +223,11 @@ class GeographicTree:
         new_level = last_processed_level
         
         # Case no new nodes to process
-        if last_processed_level >= len(GEO_COLUMNS_TO_USE):
+        if last_processed_level >= len(geo_columns):
             raise ValueError("The tree has already been fully processed. Consider incrementing the level of granularity")
         
         # Iterate over the new geographic labels to process to create new nodes
-        for label_to_process in GEO_COLUMNS_TO_USE[last_processed_level:]:
+        for label_to_process in geo_columns[last_processed_level:]:
             new_childs = []
             for processed_node in last_processed_nodes:
                 # Filter the raw data using the dictionary of the processed node
@@ -242,7 +244,7 @@ class GeographicTree:
                     child_node.geographic_values[label_to_process] = location_id
 
                     # Add edit constraints for the child node       
-                    child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in GEO_CONSTRAINTS[label_to_process]]
+                    child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in constraints_dict[label_to_process]]
 
                     # Construct the contingency vector for the child node
                     child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
