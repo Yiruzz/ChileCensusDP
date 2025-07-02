@@ -1,8 +1,6 @@
 import gurobipy as gp
 import numpy as np
 
-from config import OUTPUT_PATH
-
 class OptimizationModel:
     '''Represents an optimization model for a specific optimization problem of the geographic Tree using Gurobi.'''
 
@@ -40,7 +38,7 @@ class OptimizationModel:
         # Check for infeasibility
         if self.model.status == gp.GRB.INFEASIBLE:
             print(f"Model is infeasible for node {id_node}.")
-            self.model.write(OUTPUT_PATH+"infeasible_model.lp")
+            self.model.write("infeasible_model.lp")
             return None
 
         return x.X
@@ -77,7 +75,7 @@ class OptimizationModel:
         # Check for infeasibility
         if self.model.status == gp.GRB.INFEASIBLE:
             print(f"Model is infeasible for node {id_node}.")
-            self.model.write(OUTPUT_PATH+"infeasible_model.lp")
+            self.model.write("infeasible_model.lp")
             return None
         
         return x_floor + y.X

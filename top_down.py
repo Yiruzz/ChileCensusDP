@@ -4,7 +4,6 @@ import numpy as np
 import time
 from collections import deque
 
-from config import DATA_PATH, DATA_PATH_PROCESSED, GEO_COLUMNS_TO_USE, PROCESS_UNTIL, QUERIES, MECHANISM, PRIVACY_PARAMETERS, OUTPUT_PATH, OUTPUT_FILE, DISTANCE_METRIC
 from geographic_tree import GeographicTree
 from optimizer import OptimizationModel
 
@@ -21,22 +20,42 @@ class TopDown:
         
         Attributes:
             data (pd.DataFrame): The data to be processed.
+            processed_data (pd.DataFrame): The processed data to be used in the TopDown algorithm if necessary.
             geo_tree (GeographicTree): The geographic tree structure.
+
             permutation (pd.DataFrame): The permutations of the columns for the contingency vector.
+
             noise_mechanism (function): The noise generation function. (Discrete Gaussian or Laplace)
             privacy_budgets (list): The privacy parameters for each level in the tree.
+
+            geo_columns (list): The geographic columns used to build the geographic tree.
+            queries_columns (list): The query columns to be answered.
+            geo_constraints (dict): The geographic constraints for each level in the tree.
+
+            output_path (str): The path where the output file will be saved. Default is 'topdown_output.csv'.
+
             optimizer (OptimizationModel): The optimization model used for estimation.
+
+            distance_metric (str): The distance metric to be used for analysis (manhattan, euclidean, cosine, or None).
         '''
         self.data = None
+        self.processed_data = None
         self.geo_tree = None
 
         self.permutation = None
 
         self.noise_mechanism = None
-        self.sensitivity = None
-        self.privacy_budgets = PRIVACY_PARAMETERS
+        self.privacy_budgets = None
+
+        self.geo_columns = None
+        self.queries_columns = None
+        self.geo_constraints = None
+
+        self.output_path = 'topdown_output.csv'
 
         self.optimizer = OptimizationModel()
+
+        self.distance_metric = None
     
     def compute_permutation(self, columns: list) -> None:
         '''Computes the permutations of the given columns.
@@ -56,31 +75,24 @@ class TopDown:
         self.permutation.sort_values(by=columns, inplace=True)
         self.permutation.reset_index(drop=True, inplace=True)
 
-    def init_routine(self, data_path=DATA_PATH) -> None:
+    def init_routine(self) -> None:
         '''Initialization the routine for the TopDown class.
         
         This method is used to set up the initial parameters for the TopDown algorithm.
         '''
-        # Load the data
-        time1 = time.time()
-        print(f'Loading data from {data_path} with columns {GEO_COLUMNS_TO_USE+QUERIES} ...')
-        self.data = pd.read_csv(data_path, usecols=GEO_COLUMNS_TO_USE+QUERIES, sep=';')
-        time2 = time.time()
-        print(f'Data loaded in {time2 - time1} seconds.')
-        print(f'Data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
 
-        print(f'Computing permutations for columns {QUERIES} ...')
+        print(f'Computing permutations for columns {self.queries_columns} ...')
         time1 = time.time()
-        self.compute_permutation(QUERIES)
+        self.compute_permutation(self.queries_columns)
         time2 = time.time()
         print(f'Permutations computed with {self.permutation.shape[0]} rows and {self.permutation.shape[1]} columns in {time2-time1} seconds.\n')
 
         print(f'Constructing Tree...')
         time1 = time.time()
-        self.geo_tree = GeographicTree(0)
+        self.geo_tree = GeographicTree(0, self.geo_constraints, self.distance_metric)
         # Initialize the contingency vector for the root node
-        self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
-        self.geo_tree.construct_tree(0, self.data, self.permutation)
+        self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation, self.queries_columns)
+        self.geo_tree.construct_tree(0, self.data, self.permutation, self.geo_columns, self.queries_columns, self.geo_constraints)
         #Edit Constraint
         self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
         time2 = time.time()
@@ -92,16 +104,15 @@ class TopDown:
         It applies noise to the contingency vector of the geographic tree using the specified noise generation mechanism.
         It considers the privacy parameters (rhos/epsilon) defined in the configuration for each level.
         '''
-        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
+        if self.distance_metric: self.geo_tree.copy_to_comparative_vector()
         print(f'Measurement phase...')
-        self.set_mechanism(MECHANISM)
 
-        print(f'Applying noise using {MECHANISM} mechanism with privacy parameters {self.privacy_budgets} ...')
+        print(f'Applying noise using {self.noise_mechanism} privacy parameters {self.privacy_budgets} ...')
         time1 = time.time()
         self.apply_noise(self.geo_tree, self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
         print(f'Noise applied in {time2-time1} seconds.\n')
-        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the noisy contingency vector by levels:\n{self.compare_vectors()}\n')
+        if self.distance_metric: print(f'Distance metric {self.distance_metric} for the noisy contingency vector by levels:\n{self.compare_vectors()}\n')
 
     def estimation_phase(self) -> None:
         '''Estimation phase of the TopDown algorithm.
@@ -111,7 +122,7 @@ class TopDown:
             1. Non-negative estimation of the contingency vector. (Constraints problem)
             2. Non-negative discrete estimation of the previous result. (Rounding problem)
         '''
-        if DISTANCE_METRIC: self.geo_tree.copy_to_comparative_vector()
+        if self.distance_metric: self.geo_tree.copy_to_comparative_vector()
         print(f'Estimation phase...')
         print(f'Running estimation for root node...')
         time1 = time.time()
@@ -124,7 +135,7 @@ class TopDown:
         self.recursive_estimation(self.geo_tree)
         time2 = time.time()
         print(f'Finished estimating the solution for children nodes in {time2-time1} seconds.\n')
-        if DISTANCE_METRIC: print(f'Distance metric {DISTANCE_METRIC} for the estimation phase by levels:\n{self.compare_vectors()}\n')
+        if self.distance_metric: print(f'Distance metric {self.distance_metric} for the estimation phase by levels:\n{self.compare_vectors()}\n')
 
     def root_estimation(self) -> None:
         '''Estimates the contingency vector for the root node of the geographic tree.'''
@@ -138,14 +149,14 @@ class TopDown:
         level = len(node.geographic_values.keys())
         queue = deque([(node, level)])
         time1 = time.time()
-        if not DATA_PATH_PROCESSED: print(f'Running estimation for {GEO_COLUMNS_TO_USE[level]}...', end=' ')
+        if self.processed_data is None: print(f'Running estimation for {self.geo_columns[level]}...', end=' ')
         while queue:
             node, current_level = queue.popleft()
-            if not DATA_PATH_PROCESSED and level != current_level:
+            if self.processed_data is None and level != current_level:
                 print(round(time.time() - time1, 4), 'seconds.')
                 level = current_level
-                if current_level < len(GEO_COLUMNS_TO_USE):
-                    print(f'Running estimation for {GEO_COLUMNS_TO_USE[current_level]}...', end=' ')
+                if current_level < len(self.geo_columns):
+                    print(f'Running estimation for {self.geo_columns[current_level]}...', end=' ')
                     time1 = time.time()
 
             if not node.children: continue # Skip nodes without children
@@ -198,11 +209,11 @@ class TopDown:
         time2 = time.time()
         print(f'Finished constructing microdata in {time2-time1} seconds.\n')
 
-        print(f'Writing microdata to {OUTPUT_PATH+OUTPUT_FILE} ...')
+        print(f'Writing microdata to {self.output_path} ...')
         time1 = time.time()
         # Convert the dictionary to a DataFrame and return
         noisy_df = pd.DataFrame(microdata_dict)
-        noisy_df.to_csv(OUTPUT_PATH+OUTPUT_FILE, index=False, sep=';')
+        noisy_df.to_csv(self.output_path, index=False, sep=';')
         time2 = time.time()
         print(f'Finished writing microdata in {time2-time1} seconds.\n')
         print(f'Process finished :)\n')
@@ -221,16 +232,16 @@ class TopDown:
         # Base case: if the node is a leaf, construct the microdata for that node
         if not node.children:
             # Create a Diccionary to store the microdata for the current node
-            microdata_dict = {col: [] for col in GEO_COLUMNS_TO_USE+QUERIES}
+            microdata_dict = {col: [] for col in self.geo_columns+self.queries_columns}
             current_index = 0
             for index, row in self.permutation.iterrows():
-                for col in QUERIES:
+                for col in self.queries_columns:
                     # Add the value of the row[col] node.contingency_vector[index] times to the dictionary
                     microdata_dict[col].extend(np.repeat(row[col], node.contingency_vector[index]))
             current_index += 1
             # Add the geographic information for the current node
             for key, val in node.geographic_values.items():
-                microdata_dict[key] = list(np.repeat(val, len(microdata_dict[QUERIES[0]])))
+                microdata_dict[key] = list(np.repeat(val, len(microdata_dict[self.queries_columns[0]])))
         # Recursive case: if the node has children
         else:
             microdata_dict = {}
@@ -330,7 +341,7 @@ class TopDown:
         Returns:
             dict: A dictionary with the distance metric for each level of the tree.
         '''
-        match DISTANCE_METRIC:
+        match self.distance_metric:
             case 'manhattan':
                 distance_function = manhattan_distance
             case 'euclidean':
@@ -340,7 +351,7 @@ class TopDown:
             case 'cosine':
                 distance_function = cosine_similarity
             case _:
-                raise ValueError(f'Unknown distance metric: {DISTANCE_METRIC}, choose from manhattan, euclidean, tvd or None.')
+                raise ValueError(f'Unknown distance metric: {self.distance_metric}, choose from manhattan, euclidean, tvd or None.')
         self.geo_tree.compute_distance_metric(distance_function)
         return self.geo_tree.get_distance_metric_by_level()
     
@@ -350,19 +361,22 @@ class TopDown:
         Returns:
             pd.DataFrame: The final dataframe with the DP-data.
         '''
-        self.init_routine()
-        self.measurement_phase()
-        self.estimation_phase()
-        return self.construct_microdata()
-    
+        if self.processed_data is not None:
+            print(f'Running TopDown algorithm with processed data...\n')
+            return self.resume_run()
+        else:
+            print(f'Running TopDown alogorithm from scratch...\n')
+            self.init_routine()
+            self.measurement_phase()
+            self.estimation_phase()
+            return self.construct_microdata()
     
     def load_state(self) -> None:
         '''Loads the state of a previous run of the TopDown algorithm from a file.'''
-        self.data = pd.read_csv(DATA_PATH_PROCESSED, sep=';')
-        self.compute_permutation(QUERIES)
+        self.compute_permutation(self.queries_columns)
         self.geo_tree = GeographicTree(0)
-        self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation)
-        self.geo_tree.construct_tree(0, self.data, self.permutation)
+        self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.processed_data, self.permutation, self.queries_columns)
+        self.geo_tree.construct_tree(0, self.processed_data, self.permutation, self.geo_columns, self.queries_columns, self.geo_constraints)
 
     def extend_tree(self) -> tuple[list, int]:
         '''Extends the tree to include the new data.
@@ -371,8 +385,7 @@ class TopDown:
             list (int, list(GeographicTree)): A list of tuples where each tuple contains the level and a list of nodes at that level.
             int: The level of the last level processed in a previous run of the algorithm.
         '''
-        self.data = pd.read_csv(DATA_PATH, usecols=GEO_COLUMNS_TO_USE+QUERIES, sep=';')        
-        level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation)
+        level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation, self.geo_columns, self.queries_columns, self.geo_constraints)
         self.data = None
         return level_nodes, last_processed_level
 
@@ -387,8 +400,6 @@ class TopDown:
         '''
         _, nodes_to_noisify = level_nodes[last_processed_level+1]
         privacy_parameters_to_use = self.privacy_budgets[last_processed_level+1:]
-
-        self.set_mechanism(MECHANISM)
 
         for node in nodes_to_noisify:
             self.apply_noise(node, self.noise_mechanism, privacy_parameters_to_use)
@@ -413,12 +424,12 @@ class TopDown:
             pd.DataFrame: The final dataframe with the DP-data.
         '''
         time1 = time.time()
-        print(f'Recovering state from previous run considering {DATA_PATH_PROCESSED} data...')
+        print(f'Recovering state from previous run considering processed data...')
         self.load_state()
         print(f'Finished recovering state in {time.time()-time1} seconds.\n')
 
         time1 = time.time()
-        print(f'Extending the tree with new data from {DATA_PATH} until reaching {PROCESS_UNTIL} granularity...')
+        print(f'Extending the tree with new data until reaching {self.geo_columns[-1]} granularity...')
         level_nodes, last_processed_level = self.extend_tree()
         print(f'Finished extending the tree in {time.time()-time1} seconds.\n')
 
@@ -429,9 +440,95 @@ class TopDown:
 
         time1 = time.time()
         print(f'Running estimation phase for the new data...')
-        print(f'Starting at level of {GEO_COLUMNS_TO_USE[last_processed_level]}...')
+        print(f'Starting at level of {self.geo_columns[last_processed_level]}...')
         self.resume_estimation_phase(level_nodes, last_processed_level)
         print(f'Finished estimation phase in {time.time()-time1} seconds.\n')
         
         return self.construct_microdata()
 
+
+    def set_privacy_parameters(self, privacy_parameters: list) -> None:
+        '''Sets the privacy parameters for the TopDown algorithm.
+        
+        Args:
+            privacy_parameters (list): The privacy parameters to be used.
+        '''
+        self.privacy_budgets = privacy_parameters
+
+    def set_geo_columns(self, geo_columns: list) -> None:
+        '''Sets the geographic columns for the TopDown algorithm.
+        
+        Args:
+            geo_columns (list): The geographic columns to be used.
+        '''
+        self.geo_columns = geo_columns
+
+    def set_queries(self, queries: list) -> None:
+        '''Sets the query columns for the TopDown algorithm.
+        
+        Args:
+            queries (list): The query columns to be used.
+        '''
+        self.queries_columns = queries
+
+    def set_constraints(self, geo_constraints: dict) -> None:
+        '''Sets the geographic constraints for the TopDown algorithm.
+        
+        Args:
+            geo_constraints (dict): The geographic constraints to be used.
+        '''
+        self.geo_constraints = geo_constraints
+
+    def set_distance_metric(self, distance_metric: str) -> None:
+        '''Sets the distance metric for the TopDown algorithm.
+        
+        Args:
+            distance_metric (str): The distance metric to be used (manhattan, euclidean, cosine, or None).
+        '''
+        self.distance_metric = distance_metric
+
+    def read_data(self, data_path: str, sep=',') -> None:
+        '''Sets the data for the TopDown algorithm.
+        
+        Args:
+            data_path (str): The path to the data file in csv to be processed.
+            sep (str): The separator used in the csv file. Default is ','.
+        '''
+        if not self.queries_columns:
+            raise ValueError("Queries columns must be set before loading data.")
+        if not self.geo_columns:
+            raise ValueError("Geographic columns must be set before loading data.")
+        
+        print(f'Loading data from {data_path} with columns {self.geo_columns+self.queries_columns} ...')
+        time1 = time.time()
+        self.data = pd.read_csv(data_path, usecols=self.geo_columns+self.queries_columns, sep=sep)
+        time2 = time.time()
+        print(f'Data loaded in {time2 - time1} seconds.')
+        print(f'Data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
+
+    def read_processed_data(self, data_path: str, sep=',') -> None:
+        '''Reads the processed data from a file.
+        
+        Args:
+            data_path (str): The path to the processed data file.
+            sep (str): The separator used in the csv file. Default is ','.
+        '''
+        if not self.queries_columns:
+            raise ValueError("Queries columns must be set before loading data.")
+        if not self.geo_columns:
+            raise ValueError("Geographic columns must be set before loading data.")
+        
+        print(f'Reading processed data from {data_path} ...')
+        time1 = time.time()
+        self.processed_data = pd.read_csv(data_path, sep=sep)
+        time2 = time.time()
+        print(f'Processed data loaded in {time2 - time1} seconds.')
+        print(f'Processed data loaded with {self.data.shape[0]} rows and {self.data.shape[1]} columns.\n')
+    
+    def set_output_path(self, output_path: str) -> None:
+        '''Sets the output path for the TopDown algorithm.
+        
+        Args:
+            output_path (str): The path where the output file will be saved.
+        '''
+        self.output_path = output_path
