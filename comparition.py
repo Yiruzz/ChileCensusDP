@@ -10,7 +10,7 @@ def main():
     QUERIES = ['P08', 'P09'] # Sex and Age
 
     DATA_PATH = 'data/csv-personas-censo-2017/microdato_censo2017-personas/Microdato_Censo2017-Personas.csv'
-    DATA_PATH_PROCESSED = 'data/out/personas_noisy_microdata_COMUNA_P08P09.csv'
+    DATA_PATH_PROCESSED = 'data/out/personas_noisy_microdata_COMUNA_P08_P09.csv'
 
     real_data = TopDown()
     real_data.set_geo_columns(GEO_COLUMNS_TO_USE)

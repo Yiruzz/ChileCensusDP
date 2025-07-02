@@ -5,7 +5,7 @@ def main():
     '''Main function to run the TopDown algorithm.'''
 
     GEO_COLUMNS = ['REGION', 'PROVINCIA', 'COMUNA', 'DC', 'ZC_LOC']
-    PROCESS_UNTIL = 'DC'
+    PROCESS_UNTIL = 'COMUNA'
     GEO_COLUMNS_TO_USE = GEO_COLUMNS[:GEO_COLUMNS.index(PROCESS_UNTIL) + 1]
 
     QUERIES = ['P08', 'P09'] # Sex and Age
@@ -29,13 +29,15 @@ def main():
         'ZC_LOC': []
     }
 
+    ROOT_CONSTRAINTS = [lambda x, y: x.sum() == y]
+
     # Path of data that already has been processed
     # This is used to avoid reprocessing the data if it has already been processed.
-    DATA_PATH_PROCESSED = 'data/out/personas_noisy_microdata_COMUNA_P08P09.csv'
+    DATA_PATH_PROCESSED = None#'data/out/personas_noisy_microdata_COMUNA_P08P09.csv'
 
     # Distance metric to use (manhattan, euclidean, cosine) if None no distance will be computed.
     # Only used for testing and analysis purposes.
-    DISTANCE_METRIC = None
+    DISTANCE_METRIC = 'euclidean'
 
     topdown = TopDown()
     time_start = time.time()
@@ -46,7 +48,8 @@ def main():
     topdown.set_geo_columns(GEO_COLUMNS_TO_USE)
     topdown.set_queries(QUERIES)
 
-    topdown.set_constraints(GEO_CONSTRAINTS)
+    topdown.set_geo_constraints(GEO_CONSTRAINTS)
+    topdown.set_root_constraints(ROOT_CONSTRAINTS)
 
     topdown.set_distance_metric(DISTANCE_METRIC)
 

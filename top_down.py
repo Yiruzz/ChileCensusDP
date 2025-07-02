@@ -31,6 +31,7 @@ class TopDown:
             geo_columns (list): The geographic columns used to build the geographic tree.
             queries_columns (list): The query columns to be answered.
             geo_constraints (dict): The geographic constraints for each level in the tree.
+            root_constraints (list): The constraints for the root node of the geographic tree.
 
             output_path (str): The path where the output file will be saved. Default is 'topdown_output.csv'.
 
@@ -50,6 +51,7 @@ class TopDown:
         self.geo_columns = None
         self.queries_columns = None
         self.geo_constraints = None
+        self.root_constraints = None
 
         self.output_path = 'topdown_output.csv'
 
@@ -94,7 +96,8 @@ class TopDown:
         self.geo_tree.contingency_vector = self.geo_tree.construct_contingency_vector(self.data, self.permutation, self.queries_columns)
         self.geo_tree.construct_tree(0, self.data, self.permutation, self.geo_columns, self.queries_columns, self.geo_constraints)
         #Edit Constraint
-        self.geo_tree.constraints = [lambda x: x.sum() == self.data.shape[0]]
+        if self.root_constraints is not None:
+            self.geo_tree.constraints = [(lambda array, value=self.data.shape[0]: constraint(array, value)) for constraint in self.root_constraints]
         time2 = time.time()
         print(f'Finished constructing the tree in {time2-time1} seconds.\n')
 
@@ -471,13 +474,21 @@ class TopDown:
         '''
         self.queries_columns = queries
 
-    def set_constraints(self, geo_constraints: dict) -> None:
+    def set_geo_constraints(self, geo_constraints: dict) -> None:
         '''Sets the geographic constraints for the TopDown algorithm.
         
         Args:
             geo_constraints (dict): The geographic constraints to be used.
         '''
         self.geo_constraints = geo_constraints
+    
+    def set_root_constraints(self, root_constraints: list) -> None:
+        '''Sets the root constraints for the TopDown algorithm.
+        
+        Args:
+            root_constraints (list): The root constraints to be used.
+        '''
+        self.root_constraints = root_constraints
 
     def set_distance_metric(self, distance_metric: str) -> None:
         '''Sets the distance metric for the TopDown algorithm.
