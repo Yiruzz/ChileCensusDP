@@ -3,14 +3,29 @@ import numpy as np
 from utils import tvd
 
 def main():
-    init_data = TopDown()
-    init_data.init_routine()
 
-    out_data = TopDown()
-    out_data.init_routine('C:/Users/artur/Desktop/Memoria/ChileCensusDP/data/out/personas_noisy_microdata_DC_APPROX_P08P09.csv')
+    GEO_COLUMNS = ['REGION', 'PROVINCIA', 'COMUNA', 'DC', 'ZC_LOC']
+    PROCESS_UNTIL = 'COMUNA'
+    GEO_COLUMNS_TO_USE = GEO_COLUMNS[:GEO_COLUMNS.index(PROCESS_UNTIL) + 1]
+    QUERIES = ['P08', 'P09'] # Sex and Age
+
+    DATA_PATH = 'data/csv-personas-censo-2017/microdato_censo2017-personas/Microdato_Censo2017-Personas.csv'
+    DATA_PATH_PROCESSED = 'data/out/personas_noisy_microdata_COMUNA_P08P09.csv'
+
+    real_data = TopDown()
+    real_data.set_geo_columns(GEO_COLUMNS_TO_USE)
+    real_data.set_queries(QUERIES)
+    real_data.read_data(DATA_PATH, sep=';')
+    real_data.init_routine()
+
+    noisy_data = TopDown()
+    noisy_data.set_geo_columns(GEO_COLUMNS_TO_USE)
+    noisy_data.set_queries(QUERIES)
+    noisy_data.read_data(DATA_PATH_PROCESSED, sep=';')
+    noisy_data.init_routine()
 
     # Compare the trees
-    tvd_by_level = compare_trees_by_tvd(init_data.geo_tree, out_data.geo_tree)
+    tvd_by_level = compare_trees_by_tvd(real_data.geo_tree, noisy_data.geo_tree)
 
     # Print the results
     print("TVD by level:")

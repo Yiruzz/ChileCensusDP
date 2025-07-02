@@ -107,7 +107,7 @@ class TopDown:
         if self.distance_metric: self.geo_tree.copy_to_comparative_vector()
         print(f'Measurement phase...')
 
-        print(f'Applying noise using {self.noise_mechanism} mechanism with privacy parameters {self.privacy_budgets} ...')
+        print(f'Applying noise using {self.noise_mechanism} privacy parameters {self.privacy_budgets} ...')
         time1 = time.time()
         self.apply_noise(self.geo_tree, self.noise_mechanism, self.privacy_budgets)
         time2 = time.time()
@@ -149,10 +149,10 @@ class TopDown:
         level = len(node.geographic_values.keys())
         queue = deque([(node, level)])
         time1 = time.time()
-        if not self.processed_data: print(f'Running estimation for {self.geo_columns[level]}...', end=' ')
+        if self.processed_data is None: print(f'Running estimation for {self.geo_columns[level]}...', end=' ')
         while queue:
             node, current_level = queue.popleft()
-            if not self.processed_data and level != current_level:
+            if self.processed_data is None and level != current_level:
                 print(round(time.time() - time1, 4), 'seconds.')
                 level = current_level
                 if current_level < len(self.geo_columns):
@@ -361,11 +361,15 @@ class TopDown:
         Returns:
             pd.DataFrame: The final dataframe with the DP-data.
         '''
-        self.init_routine()
-        self.measurement_phase()
-        self.estimation_phase()
-        return self.construct_microdata()
-    
+        if self.processed_data is not None:
+            print(f'Running TopDown algorithm with processed data...\n')
+            return self.resume_run()
+        else:
+            print(f'Running TopDown alogorithm from scratch...\n')
+            self.init_routine()
+            self.measurement_phase()
+            self.estimation_phase()
+            return self.construct_microdata()
     
     def load_state(self) -> None:
         '''Loads the state of a previous run of the TopDown algorithm from a file.'''
@@ -381,7 +385,7 @@ class TopDown:
             list (int, list(GeographicTree)): A list of tuples where each tuple contains the level and a list of nodes at that level.
             int: The level of the last level processed in a previous run of the algorithm.
         '''
-        level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation, self.geo_columns, self.geo_constraints)
+        level_nodes, last_processed_level = self.geo_tree.extend_tree(self.data, self.permutation, self.geo_columns, self.queries_columns, self.geo_constraints)
         self.data = None
         return level_nodes, last_processed_level
 

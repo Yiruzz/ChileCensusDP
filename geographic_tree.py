@@ -17,6 +17,7 @@ class GeographicTree:
             labels (dict): A map with the values of the geographic entity that represents this node.
             children (list): A list of child nodes.
             contingency_table (np.array): The contingency table associated with this node.
+
             constraints (list): The constraints associated with this node.
 
             comparative_vector (np.array): The comparative vector associated with this node.
@@ -29,7 +30,7 @@ class GeographicTree:
 
         self.constraints = constraints
 
-        # NOTE: These are only used when a distance metric is defined in config.py
+        # NOTE: These are only used when a distance metric is defined in TopDown class.
         self.comparative_vector = None
         self.distance_metric = distance_metric
 
@@ -43,6 +44,7 @@ class GeographicTree:
         Args:
             df (pd.DataFrame): The dataframe to calculate the contingency vector.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
+            queries (list): A list of queries columns.
                
         Returns:                                                                                     
             np.array: The contingency vector.
@@ -97,8 +99,9 @@ class GeographicTree:
                     # Set the geographic values for the child node
                     child_node.geographic_values[geo_label] = filtered_df[geo_label].unique()[0]
 
-                # Add edit constraints for the child node       
-                child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in constraints_dict[present_geo_columns[current_level]]]
+                # Add edit constraints for the child node
+                if constraints_dict is not None:
+                    child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in constraints_dict[present_geo_columns[current_level]]]
 
                 # Construct the contingency vector for the child node
                 child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation, queries)
@@ -207,12 +210,16 @@ class GeographicTree:
 
         return metric_by_level
 
-    def extend_tree(self, raw_data: pd.DataFrame, permutation: pd.DataFrame, geo_columns: list, constraints_dict: dict) -> tuple[list, int]:
+    def extend_tree(self, raw_data: pd.DataFrame, permutation: pd.DataFrame, geo_columns: list, queries: list, constraints_dict: dict) -> tuple[list, int]:
         '''Extends the tree with the raw data and the permutation.
         
         Args:
             raw_data (pd.DataFrame): The raw data to be used for extending the tree.
             permutation (pd.DataFrame): A dataframe that have all the possible combinations of the columns unique values.
+            geo_columns (list): A list of geographic columns to be used for extending the tree.
+            queries_columns (list): A list of queries columns to be answered.
+            constraints_dict (dict): A dictionary containing the edit constraints for each geographic column.
+
 
         Returns:
             list (int, list(GeographicTree)): A list of tuples where each tuple contains the level and a list of nodes at that level.
@@ -247,7 +254,7 @@ class GeographicTree:
                     child_node.constraints = [(lambda array, value=filtered_df.shape[0]: constraint(array, value)) for constraint in constraints_dict[label_to_process]]
 
                     # Construct the contingency vector for the child node
-                    child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation)
+                    child_node.contingency_vector = self.construct_contingency_vector(filtered_df, permutation, queries)
 
                     # Add the child node to the current node
                     processed_node.add_child(child_node)
