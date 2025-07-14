@@ -1,88 +1,104 @@
 # ChileCensusDP
 
-Este archivo describe la implementación del algoritmo TopDown para el Censo de Chile 2017, adaptado de la implementación utilizada en el Censo de Estados Unidos 2020. El sistema transforma microdatos de censo crudo en microdatos sintéticos protegidos por privacidad, preservando la utilidad estadística a través de técnicas sofisticadas de optimización y procesando datos jerárquicamente a través de las divisiones administrativas chilenas.
-  
-## Inicialización  
-  
-La inicialización del algoritmo TopDown se realiza a través del método [`init_routine()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L59) de la clase [`TopDown`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L14).  Este proceso incluye:  
-  
-- **Carga de datos**: Los datos del censo se cargan utilizando pandas con filtrado específico de columnas geográficas y demográficas  
-- **Construcción del árbol geográfico**: Se crea la estructura jerárquica que representa las divisiones administrativas chilenas (Región → Provincia → Comuna → Distrito → Zona)  
-- **Creación del nodo raíz**: Se establece el nodo raíz con su vector de contingencia que representa toda la distribución demográfica del dataset  
-  
-La entrada principal del sistema se gestiona a través del archivo [`driver.py`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/driver.py#L7), que orquesta la ejecución completa del algoritmo. 
+This document describes important things to consider when using the implementation of the TopDown algorithm for the 2017 Chilean Census, adapted from the implementation used in the 2020 United States Census. The system transforms raw census microdata into synthetic microdata protected by differential privacy, preserving statistical utility through sophisticated optimization techniques and processing data hierarchically through hierarchical divisions.
 
-## Configuración de Parámetros  
-  
-El sistema utiliza un enfoque de configuración centralizado a través del archivo [`config.py`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/config.py#L1). Los parámetros principales incluyen:
+## Usage
 
-- **Jerarquía geográfica**: GEO_COLUMNS y PROCESS_UNTIL definen los niveles administrativos a procesar
-- **Parámetros de privacidad**: PRIVACY_PARAMETERS y MECHANISM configuran los presupuestos de privacidad y el mecanismo de ruido
-- **Rutas de datos**: DATA_PATH, OUTPUT_PATH y OUTPUT_FILE especifican las ubicaciones de entrada y salida
-- **Definición de consultas**: QUERIES determina las columnas demográficas a analizar
+To use the TopDown algorithm, you need to have the correct Python environment set up. Also you need to set the parameters according to your needs. In the next section, we will explain how to configure the algorithm and run it.
 
-El sistema soporta dos mecanismos de privacidad diferencial: Gaussiano Discreto y Laplace Discreto, configurables mediante el parámetro MECHANISM.
+Create a Python virtual environment and install the required dependencies:
 
-## Preprocesamiento de Datos  
-  
-El preprocesamiento se ejecuta en varias etapas secuenciales:  
-  
-**Carga y filtrado de datos**: Los datos del censo se [`cargan`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L59) selectivamente usando pandas con filtrado de columnas para optimizar el uso de memoria.    
-  
-**Generación de permutaciones**: El método [`compute_permutation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L41) genera todas las combinaciones posibles de valores demográficos.  Esto crea una matriz de permutaciones que representa cada combinación de consulta posible para construir vectores de contingencia.  
-  
-**Construcción del árbol geográfico**: Se construye la estructura jerárquica usando la clase [`GeographicTree`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/geographic_tree.py#L8), que maneja la construcción de vectores de contingencia y la aplicación de ruido.
-  
-## Fase de Medición  
-  
-La [`fase de medición`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L106) aplica mecanismos de privacidad diferencial a los vectores de contingencia:
-  
-**Selección del mecanismo**: El método [`set_mechanism()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L249) configura el mecanismo de privacidad basado en la configuración. 
-  
-**Aplicación de ruido**: El método [`apply_noise()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L260) recorre el árbol geográfico y aplica el mecanismo de ruido seleccionado con presupuestos de privacidad específicos por nivel.
-  
-**Generación de ruido**: Se utilizan las implementaciones de ruido discreto [`sample_dgauss()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/discretegauss.py#L125) y [`sample_dlaplace()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/discretegauss.py#L88) del módulo `discretegauss.py` para generar ruido según el mecanismo seleccionado.  
-  
-## Fase de Estimación  
-  
-La [`fase de estimación`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L106) utiliza optimización para estimar vectores de contingencia consistentes:
-  
-**Estimación de la raíz**: Se inicia con la optimización del nodo raíz usando [`root_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L129).
-  
-**Estimación recursiva**: El método [`recursive_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L135) procesa los nodos nivel por nivel usando traversal basado en cola. 
-  
-**Optimización en dos fases**:   
-1. Estimación real no negativa usando [`non_negative_real_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L12)  
-2. Redondeo entero con preservación de restricciones usando [`rounding_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L49)  
-  
-Ambas fases utilizan el solver de optimización matemática Gurobi a través de la clase [`OptimizationModel`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L6) para mantener consistencia padre-hijo en toda la jerarquía geográfica.  
-  
-## Generación de Microdatos  
-  
-La generación final de microdatos sintéticos se realiza a través del método [`construct_microdata()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L188):  
-  
-**Construcción recursiva**: El método [`recursive_construct_microdata()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L211) recorre los nodos hoja y crea registros individuales.
-  
-**Muestreo de individuos**: Para cada combinación de permutación, se [`replican`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L229) valores demográficos según los conteos del vector de contingencia.
-  
-**Salida de datos**: El [`resultado`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L205) es un archivo CSV que contiene registros sintéticos que mantienen propiedades estadísticas mientras protegen la privacidad individual.  
-  
-## Funcionalidad de Reanudación  
-  
-El sistema incluye capacidad de reanudación para procesos interrumpidos a través de:
-  
-- [`load_state()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L359): Recupera el estado de procesamiento previo  
-- [`extend_tree()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L367): Añade nuevos niveles geográficos al árbol existente  
-- [`resume_measurement_phase()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L379): Aplica ruido a nuevos nodos  
-- [`resume_estimation_phase()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L396): Optimiza nuevos niveles geográficos  
-  
-El método [`resume_run()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L409) permite continuar el procesamiento desde donde se detuvo.
-  
-## Validación de Calidad  
-  
-El sistema incluye validación de corrección para asegurar consistencia de datos:  
-  
-- [`check_correctness()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L270): Verifica consistencia de suma padre-hijo 
-- [`check_correctness_node()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L281): Valida consistencia de nodos individuales
-- [`Métricas de distancia`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/utils.py#L3): Miden el equilibrio privacidad-utilidad 
-  
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows just use `venv\Scripts\activate`
+pip install -r requirements.txt
+```
+
+Run the algorithm using the provided `main.py` script:
+
+```bash
+python main.py
+```
+
+An important disclaimer is that the algorithm used Gurobi as the optimization solver, which requires a valid license. If you do not have a Gurobi license, you can use the `gurobipy` package in a limited mode, but this may affect the performance and results of the algorithm. For more information on how to obtain a Gurobi license, visit [Gurobi's official website](https://www.gurobi.com/).
+
+## Parameter Configuration
+
+The system is configured programmatically through setter methods provided by the `TopDown` class. An example of how to configure and run the algorithm can be found in the [`main.py`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/main.py) file.
+
+The main parameters that must be configured include:
+
+- **Geographic hierarchy**: Defined using `set_geo_columns()`, which accepts a list of geographic levels to process (e.g., `['REGION', 'PROVINCIA', 'COMUNA']`).
+- **Privacy parameters**: Differential privacy budgets are specified using `set_privacy_parameters()`, often computed exponentially as in the example. The noise mechanism is selected with `set_mechanism()`, supporting `'discrete_gauss'` and `'discrete_laplace'`.
+- **Data paths**: The input data is loaded via `read_data(path)`, and the output location is configured with `set_output_path()`. Optionally, previously processed data can be loaded using `read_processed_data(path)`.
+- **Query definition**: The demographic variables to analyze are defined using `set_queries()`, e.g., `['P08', 'P09']` for sex and age.
+- **Constraints**:
+  - `set_geo_constraints()` allows defining consistency constraints for each geographic level.
+  - `set_root_constraints()` applies global constraints, such as total population counts.
+
+Additional optional configuration includes:
+
+- **Distance metric**: Set via `set_distance_metric()`, which can be `'manhattan'`, `'euclidean'`, `'cosine'`, or `None` if not used. This is helpful for validation or benchmarking.
+
+Once configured, the algorithm is executed via `topdown.run()`, which handles all stages: preprocessing, measurement, estimation, and synthetic data generation.
+
+## Initialization
+
+When the algorithms starts, the initialization is performed through the [`init_routine()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L59) method of the [`TopDown`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L14) class. This process includes:
+
+- **Permutation generation**: The [`compute_permutation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L41) method generates all possible combinations of demographic values. This creates a permutation matrix representing every possible query combination to construct contingency vectors.
+- **Root node creation**: The root node is initialized with its contingency vector representing the full demographic distribution of the dataset.
+**Geographic tree construction**: The hierarchical structure is built using the [`GeographicTree`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/geographic_tree.py#L8) class, which handles contingency vector construction and noise application.
+
+## Measurement Phase
+
+The [`measurement phase`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L106) applies differential privacy mechanisms to the contingency vectors:
+
+**Mechanism selection**: The [`set_mechanism()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L249) method sets the privacy mechanism based on configuration.
+
+**Noise application**: The [`apply_noise()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L260) method traverses the geographic tree and applies the selected noise mechanism with level-specific privacy budgets.
+
+**Noise generation**: Discrete noise is generated using [`sample_dgauss()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/discretegauss.py#L125) and [`sample_dlaplace()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/discretegauss.py#L88) implementations from the `discretegauss.py` module according to the selected mechanism.
+
+## Estimation Phase
+
+The [`estimation phase`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L106) uses optimization to estimate consistent contingency vectors that preserves defined constraints defined by the user, for example, that the value of the population in a state is the real value instead of the noisy value.:
+
+**Root estimation**: Begins with root node optimization using [`root_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L129).
+
+**Recursive estimation**: The [`recursive_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L135) method processes nodes level-by-level using queue-based traversal.
+
+**Two-phase optimization**:
+1. Non-negative real estimation using [`non_negative_real_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L12)  
+2. Integer rounding using [`rounding_estimation()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L49)
+
+Both phases use the Gurobi mathematical optimization solver via the [`OptimizationModel`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/optimizer.py#L6) class to maintain parent-child consistency across the geographic hierarchy.
+
+## Microdata Generation
+
+Final generation of synthetic microdata is performed via the [`construct_microdata()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L188) method:
+
+**Recursive construction**: The [`recursive_construct_microdata()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L211) method traverses leaf nodes and creates individual records.
+
+**Individual sampling**: For each permutation combination, demographic values are [`replicated`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L229) according to the counts in the contingency vector.
+
+**Data output**: The [`result`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L205) is a CSV file containing synthetic records that maintain statistical properties while protecting individual privacy.
+
+## Resume Functionality
+
+The system includes resume capabilities for interrupted processes via:
+
+- [`load_state()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L359): Recovers previous processing state  
+- [`extend_tree()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L367): Adds new geographic levels to the existing tree  
+- [`resume_measurement_phase()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L379): Applies noise to new nodes  
+- [`resume_estimation_phase()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L396): Optimizes new geographic levels  
+
+The [`resume_run()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L409) method allows continuation from where processing was stopped.
+
+## Quality Validation
+
+The system includes correctness validation to ensure data consistency:
+
+- [`check_correctness()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L270): Verifies parent-child sum consistency  
+- [`check_correctness_node()`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/top_down.py#L281): Validates consistency of individual nodes  
+- [`Distance metrics`](https://github.com/Yiruzz/ChileCensusDP/blob/afeb2a05323d2c622327d3b35c62ea22edf9d67d/utils.py#L3): Measure the privacy-utility trade-off
