@@ -237,9 +237,10 @@ class GeographicTree:
         for label_to_process in geo_columns[last_processed_level:]:
             new_childs = []
             for processed_node in last_processed_nodes:
+                filtered_df = raw_data
                 # Filter the raw data using the dictionary of the processed node
                 for key, value in processed_node.geographic_values.items():
-                    filtered_df = raw_data[raw_data[key] == value]
+                    filtered_df = filtered_df[filtered_df[key] == value]
             
                 for location_id in filtered_df[label_to_process].unique():
                     # Filter the raw data for the current location ID
